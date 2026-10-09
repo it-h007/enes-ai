@@ -1,0 +1,20 @@
+/* Production fixes on top of the unchanged design CSS (enesai.css = bundle.css).
+   Keep this file tiny; every rule documents why it exists. */
+
+/* The design sets display on many components, which defeats the HTML [hidden] attribute
+   (e.g. dismissed announcement cards, the max-quantity note, language panes). */
+[hidden] { display: none !important; }
+
+/* Focus ring for links/buttons that became anchors in the Flask port (rail items, chips,
+   invoice list items) — same gold focus colour as the design tokens. */
+a.ea-rail__item:focus-visible, a.ea-chip:focus-visible, a.ea-invlist__item:focus-visible, a.ea-tab:focus-visible {
+  outline: 3px solid var(--focus); outline-offset: 2px;
+}
+
+/* Admin: product without photo (placeholder tile in tables). */
+.ea-tprod__ph { display: grid; place-items: center; width: 42px; height: 42px; border-radius: 10px; background: var(--paper); color: var(--gray-600); flex: none; }
+.ea-pcard__noimg { display: grid; place-items: center; width: 100%; height: 100%; color: var(--gray-400); }
+
+@media (prefers-reduced-motion: reduce) {
+  .ea-wablock, .ea-btn--whatsapp, .ea-reveal, .ea-confirm__mark * { animation: none !important; }
+}

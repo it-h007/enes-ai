@@ -123,6 +123,8 @@ def _listing_page(title, lead, crumbs, base, rail_active="all", category=None, s
         chips.append((sub["name"], "/kategoria/" + category["slug"]))
     if f["sale"]:
         chips.append((_("Në ofertë"), _url(base, _params(f, ("oferta",)))))
+    if f["stock"]:
+        chips.append((_("Vetëm në stok"), _url(base, _params(dict(f, stock=False)))))
     if f["pmin"] is not None or f["pmax"] is not None:
         chips.append(("%s – %s L" % (f["pmin"] or 0, f["pmax"] if f["pmax"] is not None else "…"), _url(base, _params(f, ("cmimi",)))))
 

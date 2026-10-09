@@ -44,6 +44,8 @@ class Config:
         self.PRIVATE_DIR = inst / "private"
         self.ENV = os.environ.get("ENESAI_ENV", "development")
         secret = os.environ.get("SECRET_KEY")
+        if not secret and self.ENV == "production":
+            raise RuntimeError("SECRET_KEY must be set in production (see .env.example)")
         if not secret:
             # Development fallback: a per-instance random key persisted outside git.
             inst.mkdir(parents=True, exist_ok=True)

@@ -96,7 +96,8 @@
       openStack.push({ id: id, opener: opener || doc.activeElement, inert: siblingsOf(d) });
       openStack[openStack.length - 1].inert.forEach(function (n) { n.setAttribute('inert', ''); });
       doc.documentElement.style.overflow = 'hidden';
-      var f = (isModal ? d.querySelector('.ea-dialog') : d).querySelector(FOCUSABLE); if (f) f.focus({ preventScroll: true });
+      var f = (isModal ? d.querySelector('.ea-dialog') : d).querySelector(FOCUSABLE);
+      if (f) { f.focus({ preventScroll: true }); setTimeout(function () { if (!d.contains(doc.activeElement)) f.focus({ preventScroll: true }); }, 80); }
     } else {
       var i = -1; openStack.forEach(function (e, k) { if (e.id === id) i = k; });
       var ent = i > -1 ? openStack.splice(i, 1)[0] : null;
@@ -159,7 +160,7 @@
     var dec = st.querySelector('[data-ea="dec"]'), inc = st.querySelector('[data-ea="inc"]');
     if (dec) dec.disabled = v <= 1; if (inc) inc.disabled = v >= max;
     st.classList.toggle('is-max', v >= max && max > 1);
-    var note = closest(st, '.ea-pdp__info'); note = note && note.querySelector('[data-ea-maxnote]'); if (note) note.hidden = !(v >= max);
+    var note = closest(st, '.ea-pdp__info'); note = note && note.querySelector('[data-ea-maxnote]'); if (note) note.style.display = v >= max ? '' : 'none';
     return v;
   }
   var qtyTimers = {};
