@@ -12,7 +12,8 @@ Teknologjia: Python 3 · Flask · SQLite · Jinja2 · ReportLab · Pillow · HTM
 
 ### Windows (një klik)
 1. Instaloni **Python 3.11 ose më të ri** nga python.org (shënoni “Add Python to PATH”).
-2. Klikoni dy herë **`nis.bat`**.
+2. **Shpaketoni ZIP-in** (kliku i djathtë › “Extract All…”) dhe hapni dosjen `enesai-flask`. Mos e hapni `nis.bat` direkt nga brenda ZIP-it — Windows nxjerr vetëm atë skedar dhe instalimi dështon (“requirements.txt” nuk gjendet).
+3. Klikoni dy herë **`nis.bat`** në dosjen e shpaketuar.
    - Herën e parë krijon mjedisin, instalon paketat dhe ju kërkon të krijoni **llogarinë e pronarit** (emri i përdoruesit + fjalëkalim i fortë, min. 12 shenja).
    - Hapet shfletuesi te `http://127.0.0.1:5000`. Paneli: `http://127.0.0.1:5000/paneli`.
 
