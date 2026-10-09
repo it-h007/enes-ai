@@ -1,0 +1,10 @@
+_reference/
+.venv/
+__pycache__/
+*.pyc
+instance/
+.env
+.pytest_cache/
+dist/
+*.sqlite3
+/screens/
