@@ -61,9 +61,9 @@ def check(code, con=None):
     return {"code": row["code"], "pct": row["pct"]}
 
 
-def redeem(con, code, order_nr, customer_name):
+def redeem(con, code, order_nr, customer_name, at=None):
     """Must run inside the order transaction. Atomic: 0 rows → raise, caller rolls back."""
-    t = now_iso()
+    t = at or now_iso()
     cur = con.execute(
         "UPDATE coupons SET status='used', used_order_nr=?, used_by=?, used_at=? "
         "WHERE code=? AND status='active' AND (ends_on IS NULL OR ends_on = '' OR ends_on >= ?)",

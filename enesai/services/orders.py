@@ -160,7 +160,7 @@ def create_order(v, loc, cart_items, coupon_code, idem_key, con=None, is_demo=Fa
         customer = v["name"] + " " + v["surname"]
         nr = _allocate_number(con, prefix, int(ts[:4]))
         if coupon_code:
-            pct = coupons.redeem(con, coupons.normalize(coupon_code), nr, customer)  # raises CouponError → rollback
+            pct = coupons.redeem(con, coupons.normalize(coupon_code), nr, customer, ts)  # raises CouponError → rollback
         t = totals(lines, pct, fee, free_over)
         snap = st.seller_snapshot(s)
         search = norm(" ".join([nr, v["name"], v["surname"], v["surname"], v["name"], v["email"], coupon_code or "", v["address"]]))
