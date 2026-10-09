@@ -16,6 +16,8 @@ Teknologjia: Python 3 · Flask · SQLite · Jinja2 · ReportLab · Pillow · HTM
 3. Klikoni dy herë **`nis.bat`** në dosjen e shpaketuar.
    - Herën e parë krijon mjedisin, instalon paketat dhe ju kërkon të krijoni **llogarinë e pronarit** (emri i përdoruesit + fjalëkalim i fortë, min. 12 shenja).
    - Hapet shfletuesi te `http://127.0.0.1:5000`. Paneli: `http://127.0.0.1:5000/paneli`.
+   - **Nuk ka llogari “admin” të paracaktuar.** Hyni me emrin dhe fjalëkalimin që zgjodhët vetë te pronari (fjalëkalimi nuk shfaqet ndërsa shkruani — kjo është normale).
+   - **Harruat fjalëkalimin ose hyrja u bllokua?** Klikoni dy herë **`fjalekalimi.bat`** (ose `python run.py reset-password`): tregon llogaritë, vendos fjalëkalim të ri dhe heq bllokimin. Funksionon vetëm në kompjuterin ku ndodhet aplikacioni.
 
 ### Linux / macOS
 ```bash
@@ -71,7 +73,7 @@ Kolonat: `sku, emri_sq, emri_en, kategoria, nenkategoria, marka, paketimi, cmimi
 ## 4. Testet
 ```bash
 .venv/bin/pip install -r requirements-dev.txt
-.venv/bin/python -m pytest -q          # 73 teste: rrugët, hyrja, lejet, ngarkimet, importi, kuponat (garë paralele), numrat e porosive, PDF, WhatsApp, etj.
+.venv/bin/python -m pytest -q          # 75 teste: rrugët, hyrja, lejet, ngarkimet, importi, kuponat (garë paralele), numrat e porosive, PDF, WhatsApp, etj.
 ```
 Kontrollet në shfletues (Playwright/Chromium): `tools/e2e_checkout.py`, `tools/e2e_a11y.py`, `tools/e2e_admin.py`, `tools/shoot.py`, `tools/shoot_admin.py` (me `tools/devserver.sh`).
 

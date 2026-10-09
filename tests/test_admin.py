@@ -308,3 +308,30 @@ def test_admin_pages_render(client):
               "/paneli/porosite", "/paneli/faturat", "/paneli/kuponat", "/paneli/abonentet", "/paneli/email", "/paneli/reklamat", "/paneli/raportet",
               "/paneli/regjistri", "/paneli/cilesimet"):
         assert client.get(p).status_code == 200, p
+
+
+def test_reset_password_clears_lockout_and_sessions(client, app):
+    from conftest import OWNER_PW
+    for _ in range(6):
+        login(client, password="gabim-gabim-1")
+    assert login(client).status_code == 429  # locked even with the right password
+    with app.app_context():
+        from enesai.db import get_db
+        from enesai.services.auth import reset_password
+        assert reset_password("nuk-ekziston", "Fjalekalim-i-Ri-2026") == "Nuk ekziston përdorues me këtë emër."
+        assert reset_password("pronari", "Shkurt-1")  # too short → error text
+        assert reset_password("PRONARI", "Fjalekalim-i-Ri-2026") is None
+        assert get_db().execute("SELECT COUNT(*) FROM login_attempts WHERE username='pronari'").fetchone()[0] == 0
+        assert get_db().execute("SELECT COUNT(*) FROM audit_log WHERE action LIKE 'Rivendosi%'").fetchone()[0] == 1
+    assert login(client, password=OWNER_PW).status_code == 401
+    assert login(client, password="Fjalekalim-i-Ri-2026").status_code == 302
+
+
+def test_login_page_explains_missing_owner(tmp_path, monkeypatch):
+    monkeypatch.setenv("ENESAI_INSTANCE", str(tmp_path / "bosh"))
+    monkeypatch.setenv("SECRET_KEY", "test-secret-key-not-for-production")
+    from enesai import create_app
+    c = create_app(TESTING=True).test_client()
+    r = login(c, username="admin", password="cfaredo-1234")
+    assert r.status_code == 401
+    assert "Pronari nuk është krijuar ende" in r.text and "nis.bat" in r.text

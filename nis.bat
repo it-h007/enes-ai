@@ -14,11 +14,14 @@ echo Po instalohen paketat...
 ".venv\Scripts\python.exe" -m pip install --disable-pip-version-check -q -r requirements.txt || (echo Instalimi deshtoi. & pause & exit /b 1)
 if not exist ".env" copy ".env.example" ".env" >nul
 ".venv\Scripts\python.exe" -c "from enesai import create_app;from enesai.services.auth import owner_exists;app=create_app();ctx=app.app_context();ctx.push();import sys;sys.exit(0 if owner_exists() else 3)"
-if errorlevel 3 (
-  echo.
-  echo Krijoni llogarine e PRONARIT (vetem nje here^):
-  ".venv\Scripts\python.exe" run.py create-owner
-)
+if not errorlevel 3 goto :nisja
+echo.
+echo Krijoni llogarine e PRONARIT (vetem nje here^). Me kete emer dhe fjalekalim hyni te /paneli.
+echo Fjalekalimi nuk shfaqet nderkohe qe shkruani - kjo eshte normale.
+:pronari
+".venv\Scripts\python.exe" run.py create-owner
+if errorlevel 1 (echo Provoni perseri. & goto :pronari)
+:nisja
 echo.
 echo Faqja: http://127.0.0.1:5000   Paneli: http://127.0.0.1:5000/paneli
 start "" http://127.0.0.1:5000

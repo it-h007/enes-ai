@@ -220,3 +220,25 @@ def change_password(op, current, new, confirm):
         con.execute("DELETE FROM admin_sessions WHERE operator_id = ? AND id <> ?", (op["id"], session.get("admin_sid", "")))
         audit.log("Ndryshoi fjalëkalimin", "@" + row["username"], area="auth", con=con)
     return None
+
+
+def reset_password(username, new, con=None):
+    """Local console recovery (run.py reset-password): sets a new password, clears the
+    lockout for that username and ends all of its sessions. Returns an error text or None."""
+    con = con or get_db()
+    username = (username or "").strip().lower()
+    row = con.execute("SELECT * FROM operators WHERE username=?", (username,)).fetchone()
+    if not row:
+        return "Nuk ekziston përdorues me këtë emër."
+    prob = password_problem(new, username)
+    if prob:
+        return prob
+    if row["role"] == "owner" and len(new) < 12:
+        return "Për pronarin përdorni të paktën 12 shenja."
+    with transaction(con):
+        con.execute("UPDATE operators SET password_hash=?, must_change_password=0, active=1 WHERE id=?",
+                    (hash_password(new), row["id"]))
+        con.execute("DELETE FROM login_attempts WHERE username=?", (username,))
+        con.execute("DELETE FROM admin_sessions WHERE operator_id=?", (row["id"],))
+        audit.log("Rivendosi fjalëkalimin (konsolë)", "@" + username, area="auth", tone="danger", con=con, operator=False)
+    return None

@@ -82,6 +82,7 @@ M1 shell + public templates → M2 schema/security/auth → M3 catalogue + admin
 | M4 — Cart, checkout, coupons, orders | DONE | Session cart with server-side totals, 4-step checkout, required GPS/map location, atomic coupon redemption, per-year order numbers, stock decrement, idempotency | pytest (incl. 8-thread coupon race, 12-thread numbering) + `tools/e2e_checkout.py` |
 | M5 — Confirmation, PDF, Faturat, WhatsApp | DONE | Signed confirmation link, ReportLab PDF (clickable Maps link + QR, seller snapshot), Faturat search, manual `wa.me` to the market number, courier text; WhatsApp Business API sender (DISABLED unless credentials) | pytest (pypdf: URI annotation, Albanian glyphs), PDF rendered and compared with `invoice-pdf__EA-2026-00149-1.png` |
 | M6 — Remaining admin, i18n, SEO | DONE | Orders, invoices, coupons, subscribers, e-mail offers (prepare only), ads/announcements, reports + CSV, audit page, settings; draft EN; sitemap/robots/canonical | pytest + browser screenshots of admin screens |
+| M7b — Windows first-run fixes | DONE | `nis.bat` refuses to run outside the extracted folder; repeats owner creation until it succeeds; login page explains when no owner exists; `run.py reset-password` / `fjalekalimi.bat` (local console only: new password, clears lockout, ends sessions, audited) | pytest + console run |
 | M7 — QA, docs, deliverable | DONE | README (sq), DEPLOYMENT.md, `.env.example`, `nis.bat`, pinned requirements, `pytest.ini` (collection limited to `tests/` so nothing under `_reference/` is ever imported), final ZIP | See “Tests” below |
 
 ---
@@ -161,7 +162,7 @@ M1 shell + public templates → M2 schema/security/auth → M3 catalogue + admin
 
 | Suite | Result |
 |---|---|
-| `pytest` (`tests/`, 73 tests) | **73 passed** |
+| `pytest` (`tests/`, 75 tests) | **75 passed** |
 | `tools/e2e_checkout.py` (Chromium, real server) | **15 PASS, 0 FAIL** |
 | `tools/e2e_a11y.py` (focus trap/restore, skip link, keyboard search, admin phone menu…) | **23 PASS, 0 FAIL** |
 | `tools/e2e_admin.py` | **11 PASS, 0 FAIL** |
