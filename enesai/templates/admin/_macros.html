@@ -1,0 +1,17 @@
+{# Admin helpers (30-admin.js:29–81) #}
+{% macro stat(label, ic, value, foot, alert=False) -%}
+<div class="ea-stat{{ ' ea-stat--alert' if alert }}"><div class="ea-stat__top">{{ label }}<span class="ea-stat__ic">{{ icon(ic) }}</span></div><div class="ea-stat__value">{{ value }}</div><div class="ea-stat__foot">{{ foot }}</div></div>
+{%- endmacro %}
+{% macro delta(v, up) -%}<span class="ea-delta ea-delta--{{ 'up' if up else 'down' }}">{{ icon('trending-up' if up else 'trending-down') }}{{ v }}</span>{%- endmacro %}
+{% set STATUS = {'new': 'E re', 'prep': 'Në përgatitje', 'route': 'Në rrugë', 'done': 'Dorëzuar', 'cancel': 'Anuluar'} %}
+{% macro status_chip(s) -%}<span class="ea-status ea-status--{{ s }}">{{ STATUS[s] }}</span>{%- endmacro %}
+{# WhatsApp chip: verified API send vs opened by the customer vs nothing (honest states) #}
+{% macro wa_chip(o) -%}
+{%- if o.wa_sent_at %}<span class="ea-wachip" title="Dërguar automatikisht (WhatsApp Business API)">{{ icon('message-circle', 'ea-icon--sm') }}WhatsApp</span>
+{%- elif o.wa_opened_at %}<span class="ea-wachip" title="Klienti hapi WhatsApp-in me faturën {{ o.wa_opened_at|dt }} — dërgimi nuk verifikohet">{{ icon('message-circle', 'ea-icon--sm') }}Hapur</span>
+{%- else %}<span class="ea-wachip ea-wachip--wait">{{ icon('clock', 'ea-icon--sm') }}Pa dërguar</span>{% endif -%}
+{%- endmacro %}
+{% macro demo_tag(row) -%}{% if row.is_demo %} <span class="ea-badge ea-badge--warning" title="Të dhëna demonstrative — fshihen me: python seed.py --purge-demo">DEMO</span>{% endif %}{%- endmacro %}
+{% macro orders_table(list, compact=False, selected=None) -%}
+<div class="ea-tablewrap"><table class="ea-table"><thead><tr><th>Nr. i faturës</th><th>Data</th><th>Klienti</th>{% if not compact %}<th>Zona</th><th class="is-num">Artikuj</th>{% endif %}<th class="is-num">Totali</th>{% if not compact %}<th>Fatura</th>{% endif %}<th>Statusi</th><th class="is-actions"><span class="ea-sr">Veprime</span></th></tr></thead><tbody>{% for r in list %}<tr{% if selected == r.nr %} class="is-selected"{% endif %} data-ref="{{ r.nr }}"><td><b class="ea-num">{{ r.nr }}</b>{{ demo_tag(r) }}</td><td class="ea-num">{{ r.created_at[8:10] }}.{{ r.created_at[5:7] }} {{ r.created_at|time }}</td><td><b style="font-weight:600">{{ r.name }} {{ r.surname }}</b><br><small class="ea-muted ea-num">{{ r.phone }}</small></td>{% if not compact %}<td>{% if r.zone %}{{ r.zone }}{% else %}<span class="ea-muted">—</span>{% endif %}</td><td class="is-num">{{ r.items_count }}</td>{% endif %}<td class="is-num"><b>{{ lek(r.total) }}</b>{% if r.coupon_code %}<br><small class="ea-coupontag">{{ icon('ticket-percent', 'ea-icon--sm') }}{{ r.coupon_code }}</small>{% endif %}</td>{% if not compact %}<td>{{ wa_chip(r) }}</td>{% endif %}<td>{{ status_chip(r.status) }}</td><td class="is-actions"><a class="ea-btn ea-btn--outline ea-btn--xs ea-btn--square" href="{{ url_for('admin.orders', **dict(request.args.to_dict() if not compact else {}, hap=r.nr)) }}" data-ea="order-open" data-ref="{{ r.nr }}">Hap</a></td></tr>{% endfor %}</tbody></table></div>
+{%- endmacro %}

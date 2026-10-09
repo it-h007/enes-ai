@@ -1,0 +1,15 @@
+{% from "macros/ui.html" import field, alert with context %}
+<!doctype html>
+<html lang="sq" data-theme="dark">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex, nofollow"><title>Hyrje në panel · ENES’AI</title>
+<link rel="icon" href="/static/img/logos/enesai-favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="{{ static('css/tokens.css') }}"><link rel="stylesheet" href="{{ static('css/enesai.css') }}"></head>
+<body>
+{# admin.login (30-admin.js:436) #}
+<div class="ea-site" data-theme="dark"><div style="min-height:100vh;display:grid;place-items:center;padding:40px 16px;background:radial-gradient(120% 90% at 50% 0%, #1a1405 0%, var(--black-950) 55%)"><form class="ea-dialog" data-theme="light" style="width:min(420px,100%);transform:none" method="post" novalidate><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="next" value="{{ next or '' }}"><div style="padding:30px 28px 8px;display:grid;justify-items:center;gap:14px;text-align:center"><img src="{{ logo_src('light') }}" alt="ENES’AI Super Market" style="height:44px"><div><h1 class="ea-dialog__title">{{ heading or 'Hyrje në panel' }}</h1><p class="ea-dialog__sub">Vetëm për stafin e dyqanit.</p></div></div><div class="ea-dialog__body">
+{%- if error == 'invalid' %}{{ alert('error', 'Emri ose fjalëkalimi nuk është i saktë', 'Pas %d përpjekjesh të gabuara hyrja bllokohet për %d minuta.'|format(config.LOGIN_MAX_FAILURES, config.LOGIN_LOCK_MINUTES)) }}
+{%- elif error == 'locked' %}{{ alert('error', 'Hyrja u bllokua përkohësisht', 'Shumë përpjekje të gabuara. Provoni sërish pas %d minutash.'|format(config.LOGIN_LOCK_MINUTES)) }}
+{%- elif error == 'inactive' %}{{ alert('error', 'Llogaria është çaktivizuar', 'Kërkojini pronarit ta aktivizojë.') }}
+{%- elif expired %}{{ alert('info', 'Sesioni skadoi', 'Për siguri, hyni sërish.') }}
+{%- elif no_owner %}{{ alert('warning', 'Pronari nuk është krijuar ende', 'Në kompjuterin e serverit ekzekutoni: python run.py create-owner') }}{% endif -%}
+{{ field('lg-u', 'Emri i përdoruesit', 'username', username or '', auto='username', attrs=' maxlength="60" autocapitalize="none"') }}{{ field('lg-p', 'Fjalëkalimi', 'password', '', type='password', auto='current-password', error='Kontrolloni fjalëkalimin.' if error == 'invalid' else None, attrs=' maxlength="200"') }}<button class="ea-btn ea-btn--primary ea-btn--block ea-btn--square" type="submit">Hyr {{ icon('arrow-right', 'ea-icon--trail') }}</button></div><p class="ea-caption ea-muted" style="text-align:center;padding:0 24px 22px">Keni harruar fjalëkalimin? Kërkojini pronarit ta rivendosë.</p></form></div></div>
+</body></html>

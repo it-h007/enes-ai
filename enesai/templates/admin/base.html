@@ -1,0 +1,37 @@
+{% from "macros/ui.html" import field, alert, empty, pagination, modal, toast with context %}
+<!doctype html>
+<html lang="sq" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="csrf-token" content="{{ csrf_token() }}">
+<title>{{ title }} · Paneli · ENES’AI</title>
+<link rel="icon" href="/static/img/logos/enesai-favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="{{ static('css/tokens.css') }}">
+<link rel="stylesheet" href="{{ static('css/enesai.css') }}">
+{% block head %}{% endblock %}
+</head>
+<body>
+{# admin.shell (30-admin.js:20) — sidebar shows only the sections this operator may open; every route re-checks on the server #}
+{% macro navlinks(mobile=False) -%}
+{%- for it in admin_nav -%}
+{%- if it.group and not mobile %}<div class="ea-aside__group">{{ it.group }}</div>{% endif -%}
+{%- if mobile -%}
+<a class="ea-mnav__link" href="{{ it.url }}"{% if active == it.key %} aria-current="page"{% endif %}>{{ it.label }}{{ icon('lock', 'ea-icon--sm') if not it.allowed else icon('chevron-right', 'ea-icon--sm') }}</a>
+{%- else -%}
+<a class="ea-aside__item" href="{{ it.url }}"{% if active == it.key %} aria-current="page"{% endif %} title="{{ it.label }}">{{ icon(it.icon) }}<span>{{ it.label }}</span>{% if it.badge %}<em>{{ it.badge }}</em>{% endif %}{% if not it.allowed %}{{ icon('lock', 'ea-icon--sm ea-aside__lock') }}{% endif %}</a>
+{%- endif -%}
+{%- endfor -%}
+{%- endmacro %}
+<div class="ea-site" data-theme="light"><div class="ea-admin"><aside class="ea-aside" aria-label="Paneli i administrimit"><div class="ea-aside__brand"><img src="{{ logo_src() }}" alt="ENES’AI"><span class="ea-aside__tag">Admin</span></div><nav class="ea-aside__nav">{{ navlinks() }}</nav><div class="ea-aside__foot"><span class="ea-avatar{{ ' ea-avatar--muted' if op.role != 'owner' }}">{{ op.ini }}</span><span class="ea-aside__user"><b>{{ op.name }}</b><span>{{ op.role_label }}</span></span><form method="post" action="{{ url_for('admin.logout') }}" style="display:contents"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="ea-iconbtn" type="submit" aria-label="Dil">{{ icon('log-out') }}</button></form></div></aside>
+<div class="ea-main"><header class="ea-topbar"><button class="ea-iconbtn ea-topbar__menu" type="button" aria-label="Menuja e panelit" aria-controls="ea-amenu" aria-expanded="false" data-ea="open" data-target="ea-amenu">{{ icon('menu') }}</button><div><p class="ea-topbar__crumbs">{{ crumbs }}</p><h1 class="ea-topbar__title">{{ title }}</h1></div><form class="ea-topbar__search" method="get" action="{{ url_for('admin.invoices') }}" role="search"><span class="ea-inputwrap">{{ icon('search') }}<input class="ea-input" type="search" name="q" placeholder="Kërko faturë, klient, produkt…" aria-label="Kërkim global" data-ea-gsearch></span></form>{% if can('orders') %}<a class="ea-iconbtn" href="{{ url_for('admin.orders', status='new') }}" aria-label="Porosi të reja ({{ new_orders }})" style="position:relative">{{ icon('bell') }}{% if new_orders %}<span class="ea-count" style="box-shadow:0 0 0 2px #fff">{{ new_orders }}</span>{% endif %}</a>{% endif %}<a class="ea-btn ea-btn--outline ea-btn--sm" href="/" target="_blank" rel="noopener">{{ icon('external-link', 'ea-icon--sm') }}Shiko faqen</a></header>
+<div class="ea-workspace" data-ea-workspace data-page="{{ active }}">{% block body %}{% endblock %}</div></div></div>
+{% block overlay %}{% endblock %}
+<div class="ea-scrim" data-ea="close" data-target="ea-amenu"></div><aside class="ea-drawer" id="ea-amenu" data-theme="dark" aria-label="Menuja e panelit" aria-hidden="true" role="dialog" aria-modal="true"><div class="ea-drawer__head"><img src="{{ logo_src() }}" alt="ENES’AI" style="height:30px"><button class="ea-iconbtn" type="button" aria-label="Mbyll menunë" data-ea="close" data-target="ea-amenu">{{ icon('x') }}</button></div><div class="ea-drawer__body"><nav aria-label="Paneli i administrimit">{{ navlinks(True) }}</nav><div class="ea-mnav__meta"><div class="ea-row"><span class="ea-avatar">{{ op.ini }}</span><span><b>{{ op.name }}</b><br><span class="ea-caption ea-muted">{{ op.role_label }}</span></span></div><form method="post" action="{{ url_for('admin.logout') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="ea-btn ea-btn--outline ea-btn--sm" type="submit">{{ icon('log-out', 'ea-icon--sm') }}Dil</button></form></div></div></aside>
+<div class="ea-toasts" data-ea-toasts aria-live="polite">{% for cat, msg in get_flashed_messages(with_categories=true) %}{{ toast(msg, tone=cat if cat in ('success','error','info') else 'info') }}{% endfor %}</div></div>
+<script src="{{ static('js/enesai.js') }}" defer></script>
+<script src="{{ static('js/admin.js') }}" defer></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

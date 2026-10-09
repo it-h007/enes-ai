@@ -89,7 +89,7 @@ def checkout():
         return render_template("pages/arka.html", **_ctx(lines, coupon, cstate, v, loc, fe, True)), 422
     try:
         order, token = orders.create_order(v, loc, [(p["id"], q) for p, q, _m in lines], coupon["code"] if coupon else None, form.get("idem") or "")
-    except coupons.CouponError as e:
+    except coupons.CouponError:
         return render_template("pages/arka.html", **_ctx(lines, None, {"error": "gone", "value": coupons.normalize(code)}, v, loc, {}, True,
                                                          {"title": _("Kuponi nuk vlen më"), "text": " " + _("Ky kod u përdor ose u anulua ndërkohë. Totali u rillogarit pa kupon.")})), 409
     except orders.OrderError as e:

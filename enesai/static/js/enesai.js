@@ -369,6 +369,7 @@
     if (kind === 'zoom' || kind === 'zoom-btn') { if (kind === 'zoom' && closest(e.target, '.ea-fav, .ea-gallery__zoom')) return; var m = kind === 'zoom' ? t : closest(t, '.ea-gallery__main'); m.classList.toggle('is-zoom'); return; }
     if (kind === 'open' || kind === 'open-modal') { e.preventDefault(); setOpen(t.getAttribute('data-target'), true, t); return; }
     if (kind === 'close') {
+      e.preventDefault();
       var id2 = t.getAttribute('data-target');
       if (!id2) { var md = closest(t, '.ea-modal, .ea-drawer'); id2 = md && md.id; }
       if (id2 === 'ea-odrawer') { closeOrderDrawer(); return; }
