@@ -47,12 +47,30 @@ def money(n):
     return lek_plain(n)
 
 
+FALLBACK = {"›": ">", "‹": "<", "→": "->", "←": "<-", "–": "-", "—": "-", "…": "...", "\u00a0": " "}
+
+
 class _Canvas(rl_canvas.Canvas):
     """Canvas that knows the page count when it draws the footer (‘Faqja x/y’ on every page)."""
 
     def __init__(self, *a, footer=None, **k):
         super().__init__(*a, **k)
         self._pages, self._footer = [], footer
+
+    def _safe(self, text):
+        """Replace characters the embedded font cannot draw (user-entered names) instead of
+        printing empty boxes."""
+        f = pdfmetrics.getFont(self._fontname)
+        cmap = getattr(getattr(f, "face", None), "charToGlyph", None)
+        if not cmap:
+            return text
+        return "".join(ch if ord(ch) in cmap or ch in " \n" else FALLBACK.get(ch, "?") for ch in str(text))
+
+    def drawString(self, x, y, text, *a, **k):
+        return super().drawString(x, y, self._safe(text), *a, **k)
+
+    def drawRightString(self, x, y, text, *a, **k):
+        return super().drawRightString(x, y, self._safe(text), *a, **k)
 
     def showPage(self):
         self._pages.append(dict(self.__dict__))
@@ -92,7 +110,7 @@ def build(order, items, snap, out):
     lw = 54
     lh = lw * 160 / 624
     c.drawImage(ImageReader(str(logo)), M * mm, Y(y + lh), lw * mm, lh * mm, mask="auto")
-    font(c, "Inter-Bold", 10, INK); c.drawRightString(R * mm, Y(y + 3), ph(snap.get("legalName"), "Emri ligjor — Paneli › Cilësimet"))
+    font(c, "Inter-Bold", 10, INK); c.drawRightString(R * mm, Y(y + 3), ph(snap.get("legalName"), "Emri ligjor — Paneli > Cilësimet"))
     font(c, "Inter", 8.5, GRAY)
     c.drawRightString(R * mm, Y(y + 8), "NIPT: " + ph(snap.get("nipt"), "NIPT"))
     c.drawRightString(R * mm, Y(y + 12.5), ph(snap.get("address"), "Adresa") + ", " + (snap.get("city") or "Vlorë"))
@@ -224,6 +242,7 @@ def spaced(c, text, x_mm, y_mm, fname, size, color, space_mm):
     t = c.beginText(x_mm * mm, Y(y_mm))
     t.setFont(fname, size); t.setFillColor(color); t.setCharSpace(space_mm * mm)
     t.textOut(text)
+    t.setCharSpace(0)  # Tc persists in the PDF text state: reset it
     c.drawText(t)
 
 

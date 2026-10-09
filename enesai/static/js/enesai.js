@@ -246,14 +246,15 @@
     var wrap = box.querySelector('[data-ea-map]'), canvas = wrap.querySelector('[data-ea-map-canvas]'), form = closest(box, '[data-ea-checkout]');
     var lat = +wrap.getAttribute('data-lat'), lng = +wrap.getAttribute('data-lng');
     if (!window.L) return;
-    if (box._map) { box._map.invalidateSize(); box._moving = true; box._map.setView([lat, lng], zoom); box._moving = false; return; }
+    if (box._map) { box._user = false; box._map.invalidateSize(); box._map.setView([lat, lng], zoom, { animate: false }); return; }
     canvas.innerHTML = '';
     var map = L.map(canvas, { zoomControl: true, attributionControl: true }).setView([lat, lng], zoom); box._map = map;
     var fails = 0, tiles = L.tileLayer(form.getAttribute('data-map-tiles'), { maxZoom: 19, attribution: form.getAttribute('data-map-attr') }).addTo(map);
     tiles.on('tileerror', function () { if (++fails === 3 && !wrap.querySelector('.ea-loc__offline')) wrap.insertAdjacentHTML('beforeend', '<p class="ea-loc__offline">Harta kërkon internet. Pa internet, përdorni butonin “Përdor vendndodhjen time”.</p>'); });
-    map.on('click', function (e) { map.panTo(e.latlng); });
+    ['pointerdown', 'wheel', 'keydown', 'touchstart'].forEach(function (ev) { canvas.addEventListener(ev, function () { box._user = true; }, { passive: true }); });
+    map.on('click', function (e) { box._user = true; map.panTo(e.latlng); });
     map.on('move', function () {
-      if (box._moving) return;
+      if (!box._user) return;   /* only the customer's own map moves change the point */
       var c = map.getCenter(); wrap.setAttribute('data-lat', c.lat.toFixed(6)); wrap.setAttribute('data-lng', c.lng.toFixed(6));
       if (box.getAttribute('data-state') === 'ok') {   /* moving after confirming updates the confirmed point (map source) */
         box.querySelector('input[name="lat"]').value = c.lat.toFixed(6); box.querySelector('input[name="lng"]').value = c.lng.toFixed(6);
