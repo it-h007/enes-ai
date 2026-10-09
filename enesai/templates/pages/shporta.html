@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% from "macros/ui.html" import page_head, empty with context %}
+{% from "macros/commerce.html" import freebar, cart_item, summary with context %}
+{% block title %}{{ _('Shporta') }}{% endblock %}
+{% block main %}
+{# pages.cart (20-pages.js:95) #}
+{{ page_head(_('Shporta'), None, None, [(_('Ballina'), '/'), (_('Dyqani'), '/dyqani'), (_('Shporta'),)]) }}
+<div class="ea-panelwrap"><div class="ea-container"><div class="ea-panel" data-theme="light" data-ea-cartpage>
+{%- if not lines -%}
+{{ empty(_('Shporta juaj është bosh'), _('Shtoni produkte nga dyqani — do t’i gjeni këtu, gati për porosi.'), 'shopping-bag', ('<a class="ea-btn ea-btn--primary ea-btn--lg" href="/dyqani">' ~ _('Fillo blerjen') ~ ' ' ~ icon('arrow-right', 'ea-icon--trail') ~ '</a><a class="ea-btn ea-btn--outline ea-btn--lg" href="/oferta">' ~ _('Shiko ofertat') ~ '</a>')|safe) }}
+{%- else -%}
+{%- set n = lines|length -%}
+<div class="ea-cart"><div>{{ freebar(t, free_over) }}<section class="ea-cart__items" aria-labelledby="ci-t"><div class="ea-cart__head"><h2 class="ea-h-title" id="ci-t">{{ n }} {{ _('produkt') if n == 1 else _('produkte') }}</h2><button class="ea-btn ea-btn--ghost ea-btn--sm" type="button" data-ea="cart-clear">{{ icon('trash-2', 'ea-icon--sm') }}{{ _('Pastro shportën') }}</button></div>{% for p, q, m in lines %}{{ cart_item(p, q, m) }}{% endfor %}</section><a class="ea-btn ea-btn--link" href="/dyqani" style="margin-top:16px">{{ icon('arrow-left', 'ea-icon--sm') }}{{ _('Vazhdo blerjen') }}</a></div>{{ summary(lines, t, fee, free_over, secondary=True) }}</div><div class="ea-mobilebar"><span class="ea-mobilebar__total">{{ _('Totali') }}<span class="ea-price">{{ lek(t.total) }}</span></span><a class="ea-btn ea-btn--primary" href="/arka">{{ _('Vazhdo te arka') }}</a></div>
+{%- endif -%}
+</div></div></div>
+{% endblock %}
+{% block after_main %}
+{% from "macros/ui.html" import modal with context %}
+{% call modal('ea-clearcart', _('Të pastrohet shporta?'), _('Të gjitha produktet hiqen nga shporta. Ky veprim nuk mund të kthehet.'), danger=True) %}<div class="ea-dialog__foot"><button class="ea-btn ea-btn--ghost ea-btn--sm" type="button" data-ea="close">{{ _('Anulo') }}</button><form method="post" action="/shporta/pastro" style="display:contents"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="ea-btn ea-btn--danger ea-btn--sm ea-btn--square" type="submit">{{ icon('trash-2', 'ea-icon--sm') }}{{ _('Pastro shportën') }}</button></form></div>{% endcall %}
+{% endblock %}

@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% from "macros/ui.html" import page_head, empty, pagination with context %}
+{% from "macros/commerce.html" import rail, filters, toolbar, product_grid, load_more with context %}
+{% block title %}{{ title }}{% endblock %}
+{% block main %}
+{# pages.shop / pages.category / pages.shopResults (20-pages.js:26–51) #}
+{{ page_head(title, lead, '/static/img/photography/shop-banner.jpg', crumbs_list) }}
+<div class="ea-panelwrap"><div class="ea-container"><div class="ea-panel" data-theme="light">{{ rail(rail_active) }}
+{%- if subchips %}<div class="ea-chips" style="margin:-4px 0 20px" role="group" aria-label="{{ _('Nënkategoritë') }}">{% for label, href, pressed in subchips %}<a class="ea-chip ea-chip--plain" href="{{ href }}" aria-pressed="{{ 'true' if pressed else 'false' }}">{{ label }}</a>{% endfor %}</div>{% endif -%}
+<div class="ea-shop">{{ filters(f, filter_cats, total_all) }}<div>
+{%- set is_empty = listing.total == 0 -%}
+{{ toolbar(listing['items']|length if not is_empty else 0, listing.total, chips, f) }}
+{%- if is_empty -%}
+  {%- if f.q -%}
+    {{ empty(_('Asnjë produkt për “%(q)s”', q=f.q), _('Kontrolloni drejtshkrimin ose provoni një fjalë më të përgjithshme.'), 'search-x', ('<a class="ea-btn ea-btn--primary" href="/dyqani">' ~ _('Shiko të gjitha produktet') ~ '</a><a class="ea-btn ea-btn--outline" href="/kategorite">' ~ _('Shfleto kategoritë') ~ '</a>')|safe) }}
+  {%- elif f.fav -%}
+    {{ empty(_('Nuk keni ende të preferuara'), _('Shtypni zemrën te një produkt për ta ruajtur këtu, në këtë shfletues.'), 'heart', ('<a class="ea-btn ea-btn--primary" href="/dyqani">' ~ _('Shiko të gjitha produktet') ~ '</a>')|safe) }}
+  {%- elif category and not f.has_filters -%}
+    {{ empty(_('Kjo kategori është ende bosh'), _('Produktet e reja shtohen çdo javë. Ndërkohë, shikoni kategoritë e tjera.'), 'package', ('<a class="ea-btn ea-btn--primary" href="/kategorite">' ~ _('Kategoritë e tjera') ~ '</a>')|safe) }}
+  {%- else -%}
+    {{ empty(_('Asnjë produkt me këto filtra'), _('Hiqni ndonjë filtër ose provoni një çmim tjetër.'), 'search-x', ('<a class="ea-btn ea-btn--primary" href="' ~ f.clear_url ~ '">' ~ _('Pastro filtrat') ~ '</a>')|safe) }}
+  {%- endif -%}
+{%- else -%}
+{{ product_grid(listing['items']) }}
+<div style="margin-top:28px">{% if load_more_mode %}{{ load_more(listing['items']|length + (listing.page - 1) * listing.per_page, listing.total, page_url(listing.page + 1) if listing.page < listing.pages else None) }}{% else %}{{ pagination(listing.page, listing.pages, page_url) }}{% endif %}</div>
+{%- endif -%}
+</div></div></div></div></div>
+{% endblock %}
+{% block after_main %}
+<div class="ea-scrim" data-ea="close" data-target="ea-fdrawer"></div><aside class="ea-drawer" id="ea-fdrawer" data-theme="light" aria-label="{{ _('Filtrat') }}" aria-hidden="true" role="dialog" aria-modal="true"><div class="ea-drawer__head"><h2 class="ea-h-title">{{ _('Filtrat') }}</h2><button class="ea-iconbtn" type="button" aria-label="{{ _('Mbyll filtrat') }}" data-ea="close" data-target="ea-fdrawer">{{ icon('x') }}</button></div><div class="ea-drawer__body">{{ filters(f, filter_cats, total_all, '-d', True) }}</div><div class="ea-drawer__foot"><a class="ea-btn ea-btn--ghost ea-btn--sm" href="{{ f.clear_url }}">{{ _('Pastro') }}</a><button class="ea-btn ea-btn--primary ea-btn--block ea-btn--square" type="submit" form="ea-ff-d">{{ _('Shfaq %(n)s produkte', n=num(listing.total)) }}</button></div></aside>
+{% endblock %}

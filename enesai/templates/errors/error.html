@@ -1,0 +1,6 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block main %}
+{# Generic error in the 404 layout; never shows stack traces or internals #}
+<section class="ea-section" data-theme="dark"><div class="ea-container"><div class="ea-notfound"><div class="ea-notfound__img"><img src="/static/img/photography/dark-produce.jpg" alt=""></div><span class="ea-notfound__code">{{ code }}</span><h1 class="ea-h-page">{{ _(title) }}</h1><p class="ea-lead" style="color:#D6D6D6;max-width:46ch">{{ _(text) }}</p><div class="ea-notfound__links"><a class="ea-btn ea-btn--primary" href="/">{{ icon('house') }}{{ _('Ballina') }}</a><a class="ea-btn ea-btn--outline" href="/dyqani">{{ _('Dyqani Online') }}</a></div></div></div></section>
+{% endblock %}

@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% from "macros/ui.html" import page_head, empty with context %}
+{% block title %}{{ _('Çabonimi') }}{% endblock %}
+{% block main %}
+{{ page_head(_('Çabonimi nga email-et'), None, None, [(_('Ballina'), '/'), (_('Çabonimi'),)]) }}
+<div class="ea-panelwrap"><div class="ea-container"><div class="ea-panel" data-theme="light">
+{% if not row %}{{ empty(_('Lidhja nuk është e vlefshme'), _('Kjo lidhje çabonimi nuk ekziston ose është e vjetër.'), 'mail-x') }}
+{% elif done %}{{ empty(_('U çabonuat'), _('Nuk do të merrni më email me oferta. Porositë tuaja nuk preken.'), 'mail-check', ('<a class="ea-btn ea-btn--primary" href="/">' ~ _('Kthehu në ballinë') ~ '</a>')|safe) }}
+{% else %}<div class="ea-empty"><span class="ea-empty__ic">{{ icon('mail') }}</span><h2 class="ea-empty__title">{{ _('Të çabonohet %(e)s?', e=row.email) }}</h2><p class="ea-empty__text">{{ _('Nuk do të merrni më email me oferta dhe kupona.') }}</p><form method="post" class="ea-empty__actions"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="ea-btn ea-btn--primary" type="submit">{{ _('Po, më çabono') }}</button><a class="ea-btn ea-btn--outline" href="/">{{ _('Anulo') }}</a></form></div>{% endif %}
+</div></div></div>
+{% endblock %}

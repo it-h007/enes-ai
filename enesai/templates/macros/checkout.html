@@ -1,0 +1,33 @@
+{# Checkout components (20-pages.js:112–180). The location picker markup is mirrored in static/js/enesai.js (locationPickerHTML) for client-side state changes. #}
+{% from "macros/ui.html" import field with context %}
+{% from "macros/commerce.html" import coupon_field with context %}
+
+{% macro static_map() -%}
+<svg class="ea-loc__static" viewBox="0 0 600 300" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><rect width="600" height="300" fill="#EAE8E1"/><path d="M0 214 C130 196 230 238 350 214 S540 186 600 198 V300 H0Z" fill="#BFD9E6"/><g stroke="#fff" stroke-width="10" fill="none" stroke-linecap="round"><path d="M-10 70 L610 104"/><path d="M118 -10 L150 230"/><path d="M330 -10 L312 214"/><path d="M482 -10 L520 200"/><path d="M0 160 L600 140"/></g><g stroke="#fff" stroke-width="4" fill="none"><path d="M226 0 L232 214"/><path d="M406 0 L420 214"/><path d="M0 34 L600 52"/></g><text x="22" y="276" fill="#6B8FA3" font-family="Inter, sans-serif" font-size="12" font-weight="700" letter-spacing="3">GJIRI I VLORËS</text></svg>
+{%- endmacro %}
+
+{# loc = {state: idle|loading|map|denied|ok, src: gps|map, lat, lng, acc, error: bool} #}
+{% macro location_picker(loc, center) -%}
+{%- set st = loc.state or 'idle' -%}
+{%- set ok = st == 'ok' -%}
+{%- set show_map = ok or st in ('map', 'denied') -%}
+{%- set lat = loc.lat if loc.lat is not none else center[0] -%}
+{%- set lng = loc.lng if loc.lng is not none else center[1] -%}
+<div class="ea-loc{{ ' is-invalid' if loc.error }}{{ ' is-ok' if ok }}" data-ea-loc data-state="{{ st }}" data-src="{{ loc.src or '' }}" data-acc="{{ loc.acc or '' }}" data-center="{{ center[0] }},{{ center[1] }}"><div class="ea-loc__choices" role="group" aria-label="{{ _('Si ta jepni vendndodhjen') }}"><button class="ea-loc__choice" type="button" data-ea="loc-gps" aria-pressed="{{ 'true' if loc.src == 'gps' or st == 'loading' else 'false' }}"><span class="ea-loc__ic">{{ icon('crosshair') }}</span><span><b>{{ _('Përdor vendndodhjen time') }}</b><small>{{ _('Nga GPS-i i telefonit ose kompjuterit') }}</small></span></button><button class="ea-loc__choice" type="button" data-ea="loc-map" aria-pressed="{{ 'true' if loc.src == 'map' or st in ('map', 'denied') else 'false' }}"><span class="ea-loc__ic">{{ icon('map-pinned') }}</span><span><b>{{ _('Zgjidh në hartë') }}</b><small>{{ _('Vendosni pikën te shtëpia juaj') }}</small></span></button></div><div class="ea-loc__map" data-ea-map{% if not show_map %} hidden{% endif %} data-lat="{{ lat }}" data-lng="{{ lng }}"><div class="ea-loc__canvas" data-ea-map-canvas>{{ static_map() }}</div><span class="ea-loc__pin" aria-hidden="true">{{ icon('map-pin') }}</span><button class="ea-btn ea-btn--dark ea-btn--sm ea-loc__confirm" type="button" data-ea="loc-confirm">{{ icon('check') }}{{ _('Konfirmo këtë pikë') }}</button></div><div class="ea-loc__status" role="status" data-ea-loc-status>
+{%- if st == 'ok' -%}<span class="ea-loc__ok">{{ icon('circle-check', 'ea-icon--sm') }}<span><b>{{ _('Vendndodhja u konfirmua') }}</b> <span class="ea-num">{{ '%.5f'|format(lat|float) }}, {{ '%.5f'|format(lng|float) }}</span>{% if loc.acc %} · ±{{ loc.acc }} m{% endif %} · {{ _('zgjedhur në hartë') if loc.src == 'map' else _('nga GPS') }}</span></span><a class="ea-btn ea-btn--link" href="{{ maps_url(lat, lng) }}" target="_blank" rel="noopener">{{ _('Kontrollo në Google Maps') }} {{ icon('external-link', 'ea-icon--sm') }}</a>
+{%- elif st == 'map' -%}<span class="ea-loc__hint">{{ icon('map-pinned', 'ea-icon--sm') }}<span>{{ _('Lëvizni hartën derisa pika e artë të jetë mbi shtëpinë tuaj, pastaj shtypni') }} <b>“{{ _('Konfirmo këtë pikë') }}”</b>.</span></span>
+{%- elif st == 'denied' -%}<span class="ea-loc__warn">{{ icon('triangle-alert', 'ea-icon--sm') }}<span><b>{{ _('Leja për GPS u refuzua.') }}</b> {{ _('Vendosni pikën në hartë — është po aq e saktë.') }}</span></span>
+{%- else -%}<span class="ea-loc__hint">{{ icon('info', 'ea-icon--sm') }}{{ _('E detyrueshme — korrieri vjen direkt te pika që zgjidhni, pa ju telefonuar.') }}</span>
+{%- endif -%}
+</div><input type="hidden" name="lat" value="{{ ('%.6f'|format(lat|float)) if ok else '' }}"><input type="hidden" name="lng" value="{{ ('%.6f'|format(lng|float)) if ok else '' }}"><input type="hidden" name="loc_source" value="{{ loc.src if ok else '' }}"><input type="hidden" name="accuracy_m" value="{{ loc.acc if ok and loc.acc else '' }}"><p class="ea-field__error" id="co-loc-e">{{ icon('circle-alert') }}{{ _('Zgjidhni vendndodhjen: përdorni GPS-in ose vendosni pikën në hartë.') }}</p></div>
+{%- endmacro %}
+
+{# pages.checkoutSummary — right column (no button, DD-08) #}
+{% macro checkout_summary(lines, t, coupon, fee, free_over) -%}
+{% from "macros/commerce.html" import summary with context %}{{ summary(lines, t, fee, free_over, title=_('Porosia juaj'), items=True, coupon=coupon, cta=False) }}
+{%- endmacro %}
+
+{# pages.checkoutFinal — step 4 (coupon, totals, terms, confirm) #}
+{% macro checkout_final(t, coupon, coupon_state, terms_checked=False, terms_error=False) -%}
+<div class="ea-cofinal" data-ea-cofinal>{{ coupon_field(coupon_state) }}<div class="ea-cofinal__totals"><div class="ea-summary__row"><span>{{ _('Produktet (%(n)s artikuj)', n=t['items']) }}</span><b>{{ lek(t.sub) }}</b></div>{% if t.discount %}<div class="ea-summary__row ea-summary__row--disc"><span>{{ _('Kuponi') }} {{ coupon.code }} (−{{ t.pct }}%)</span><b>−{{ lek(t.discount) }}</b></div>{% endif %}<div class="ea-summary__row"><span>{{ _('Dërgesa') }} · {{ store.city }}</span><b>{{ lek(t.fee) if t.fee else _('Falas') }}</b></div><div class="ea-summary__total"><span>{{ _('Totali për t’u paguar') }}</span><span class="ea-price">{{ lek(t.total) }}</span></div></div><label class="ea-check ea-terms{{ ' is-invalid' if terms_error }}"><input type="checkbox" id="co-terms" name="terms" value="1" required aria-describedby="co-terms-e"{% if terms_checked %} checked{% endif %}><span>{{ _('Pranoj') }} <a href="/kushtet" target="_blank">{{ _('Kushtet e shitjes') }}</a> {{ _('dhe') }} <a href="/kushtet#privatesia" target="_blank">{{ _('Politikën e privatësisë') }}</a>.</span></label><p class="ea-field__error" id="co-terms-e">{{ icon('circle-alert') }}{{ _('Pranoni kushtet për të vazhduar.') }}</p><button class="ea-btn ea-btn--primary ea-btn--lg ea-btn--block ea-btn--square" type="submit" name="action" value="order" data-ea="confirm-order">{{ _('Konfirmo porosinë') }}{{ icon('arrow-right', 'ea-icon--trail') }}</button><p class="ea-summary__ctanote">{{ icon('message-circle', 'ea-icon--sm') }}<span>{{ _('Pas konfirmimit hapet fatura me butonin e gjelbër') }} <b>“{{ _('Dërgo faturën në WhatsApp') }}”</b> {{ _('te numri i marketit. Paguani cash në dorëzim.') }}</span></p></div>
+{%- endmacro %}

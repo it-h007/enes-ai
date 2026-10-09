@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% from "macros/ui.html" import page_head, empty, pagination with context %}
+{% block title %}{{ _('Njoftime') }}{% endblock %}
+{% block main %}
+{# pages.news (20-pages.js:365) #}
+{{ page_head(_('Njoftime'), _('Lajme nga dyqani, reklama dhe shpallje pune.'), None, [(_('Ballina'), '/'), (_('Njoftime'),)]) }}
+<div class="ea-panelwrap"><div class="ea-container"><div class="ea-panel" data-theme="light"><div class="ea-between" style="margin-bottom:20px;flex-wrap:wrap"><div class="ea-chips" role="group" aria-label="{{ _('Lloji') }}"><a class="ea-chip ea-chip--plain" aria-pressed="{{ 'false' if type_ else 'true' }}" href="/njoftime">{{ _('Të gjitha') }} · {{ data.all }}</a><a class="ea-chip ea-chip--plain" aria-pressed="{{ 'true' if type_ == 'njoftim' else 'false' }}" href="/njoftime?lloji=njoftim">{{ _('Njoftime') }} · {{ data.counts.njoftim }}</a><a class="ea-chip ea-chip--plain" aria-pressed="{{ 'true' if type_ == 'reklame' else 'false' }}" href="/njoftime?lloji=reklame">{{ _('Reklama') }} · {{ data.counts.reklame }}</a><a class="ea-chip ea-chip--plain" aria-pressed="{{ 'true' if type_ == 'pune' else 'false' }}" href="/njoftime?lloji=pune">{{ _('Shpallje pune') }} · {{ data.counts.pune }}</a></div><span class="ea-caption ea-muted">{{ _('Renditur sipas datës') }}</span></div>
+{% if data['items'] %}<div class="ea-ngrid">{% for n in data['items'] %}<article class="ea-ncard"><div class="ea-ncard__img{{ ' ea-ncard__img--contain' if n.contain }}"><img src="{{ n.img }}" alt="" loading="lazy"></div><div class="ea-ncard__body"><div class="ea-ncard__meta"><span class="ea-badge ea-badge--{{ n.tone }}">{{ n.type_label }}</span><time>{{ n.date }}</time></div><h2 class="ea-ncard__title">{{ n.title }}</h2><p class="ea-ncard__text">{{ n.text }}</p><a class="ea-ncard__link" href="{{ n.detail_href }}">{{ _('Lexo më shumë') }} {{ icon('arrow-right', 'ea-icon--sm') }}</a></div></article>{% endfor %}</div>{% if data.pages > 1 %}<div style="margin-top:28px">{{ pagination(data.page, data.pages, page_url, meta=False) }}</div>{% endif %}
+{% else %}{{ empty(_('Nuk ka njoftime për momentin'), _('Njoftimet, reklamat dhe shpalljet e punës do të shfaqen këtu.'), 'bell', ('<a class="ea-btn ea-btn--primary" href="/">' ~ _('Kthehu në ballinë') ~ '</a>')|safe) }}{% endif %}
+</div></div></div>
+{% endblock %}

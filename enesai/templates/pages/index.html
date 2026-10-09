@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% from "macros/home.html" import hero, services, category_grid, promos, announcements, about, newsletter with context %}
+{% from "macros/ui.html" import section_head with context %}
+{% block title %}{{ _('Ballina') }}{% endblock %}
+{% block main %}
+<div class="ea-container" style="padding-top:22px">{{ hero() }}{{ services() }}</div>
+<section class="ea-section" aria-labelledby="cats-t" style="padding-bottom:20px"><div class="ea-container">{{ section_head(_('Kategoritë Kryesore'), _('Shiko të gjitha'), '/kategorite', None, 'cats-t') }}{{ category_grid(home_categories) }}</div></section>
+<section class="ea-section--tight" aria-label="{{ _('Oferta') }}"><div class="ea-container">{{ promos() }}</div></section>
+{% if home_announcements %}<section class="ea-section--tight" aria-labelledby="ann-t"><div class="ea-container"><h2 class="ea-sr" id="ann-t">{{ _('Njoftime') }}</h2>{{ announcements(home_announcements) }}</div></section>{% endif %}
+<section class="ea-section" aria-labelledby="ea-about-t" style="padding-bottom:28px"><div class="ea-container">{{ about() }}</div></section>
+<section style="padding-bottom:56px"><div class="ea-container">{{ newsletter('ballina') }}</div></section>
+{% endblock %}

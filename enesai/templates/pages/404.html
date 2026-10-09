@@ -1,0 +1,7 @@
+{% extends "base.html" %}
+{% from "macros/ui.html" import search with context %}
+{% block title %}{{ _('Kjo faqe nuk u gjet') }}{% endblock %}
+{% block main %}
+{# pages.notFound (20-pages.js:383) — served with HTTP 404 #}
+<section class="ea-section" data-theme="dark"><div class="ea-container"><div class="ea-notfound"><div class="ea-notfound__img"><img src="/static/img/photography/dark-produce.jpg" alt=""></div><span class="ea-notfound__code">404</span><h1 class="ea-h-page">{{ _('Kjo faqe nuk u gjet') }}</h1><p class="ea-lead" style="color:#D6D6D6;max-width:46ch">{{ _('Lidhja mund të jetë e vjetër ose produkti nuk është më në katalog. Provoni të kërkoni ose kthehuni te dyqani.') }}</p>{{ search('q404') }}<div class="ea-notfound__links"><a class="ea-btn ea-btn--primary" href="/">{{ icon('house') }}{{ _('Ballina') }}</a><a class="ea-btn ea-btn--outline" href="/dyqani">{{ _('Dyqani Online') }}</a><a class="ea-btn ea-btn--outline" href="/oferta">{{ _('Ofertat') }}</a><a class="ea-btn ea-btn--ghost" href="/kontakt">{{ _('Kontakt') }}</a></div></div></div></section>
+{% endblock %}

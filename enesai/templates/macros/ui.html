@@ -1,0 +1,59 @@
+{# Jinja port of EnesAi.ui.* generic components (source/authoring/js/10-ui.js). Markup, classes, ids and ARIA are kept 1:1. #}
+
+{% macro logo(size=None, variant=None) -%}
+<a class="ea-logo{{ ' ea-logo--sm' if size == 'sm' }}" href="/" aria-label="{{ _('ENES’AI Super Market — Ballina') }}"><img src="{{ logo_src(variant) }}" alt="ENES’AI Super Market" width="{{ 46 if variant == 'mark' else 192 }}" height="46"></a>
+{%- endmacro %}
+
+{% macro search(id='q', value='') -%}
+<form class="ea-search" role="search" action="/dyqani" data-ea="search"><label class="ea-sr" for="{{ id }}">{{ _('Kërko produkte') }}</label><input class="ea-search__input" id="{{ id }}" name="q" type="search" autocomplete="off" placeholder="{{ _('Kërkoni produkte, kategori, marka...') }}" value="{{ value }}" aria-controls="ea-sg-{{ id }}" aria-expanded="false" aria-autocomplete="list" maxlength="80"><button class="ea-search__btn" type="submit" aria-label="{{ _('Kërko') }}">{{ icon('search') }}</button><div class="ea-suggest" role="listbox" id="ea-sg-{{ id }}" aria-label="{{ _('Sugjerime') }}"></div></form>
+{%- endmacro %}
+
+{% macro crumbs(list) -%}
+<nav class="ea-crumbs" aria-label="{{ _('Gjurma') }}">{% for c in list %}{% if not loop.first %}{{ icon('chevron-right') }}{% endif %}{% if loop.last %}<span aria-current="page">{{ c[0] }}</span>{% else %}<a href="{{ c[1] or '#' }}">{{ c[0] }}</a>{% endif %}{% endfor %}</nav>
+{%- endmacro %}
+
+{% macro page_head(title, lead=None, image=None, crumbs_list=None) -%}
+<section class="ea-pagehead{{ '' if image else ' ea-pagehead--plain' }}" data-theme="dark">{% if image %}<div class="ea-pagehead__art"><img src="{{ image }}" alt=""></div>{% endif %}<div class="ea-container ea-pagehead__inner">{% if crumbs_list %}{{ crumbs(crumbs_list) }}{% endif %}<h1 class="ea-h-page">{{ title }}</h1>{% if lead %}<p class="ea-pagehead__lead">{{ lead }}</p>{% endif %}</div></section>
+{%- endmacro %}
+
+{% macro section_head(title, link=None, href=None, sub=None, id=None) -%}
+<div class="ea-sechead"><div><h2 class="ea-h-section"{% if id %} id="{{ id }}"{% endif %}>{{ title }}</h2>{% if sub %}<p>{{ sub }}</p>{% endif %}</div>{% if link %}<a class="ea-sechead__link" href="{{ href or '#' }}">{{ link }}{{ icon('arrow-right') }}</a>{% endif %}</div>
+{%- endmacro %}
+
+{% macro alert(tone, title=None, text=None, actions=None) -%}
+{%- set ic = {'success': 'circle-check', 'warning': 'triangle-alert', 'error': 'circle-alert', 'info': 'info', 'gold': 'info'}.get(tone, 'info') -%}
+<div class="ea-alert ea-alert--{{ tone }}" role="{{ 'alert' if tone == 'error' else 'status' }}">{{ icon(ic) }}<div>{% if title %}<b>{{ title }}</b>{% endif %}{{ text or '' }}{% if actions %}<div class="ea-alert__actions">{{ actions }}</div>{% endif %}</div></div>
+{%- endmacro %}
+
+{% macro toast(title, text=None, tone='success', img=None, ic=None) -%}
+<div class="ea-toast ea-toast--{{ tone }}" role="{{ 'alert' if tone == 'error' else 'status' }}">{% if img %}<img class="ea-toast__img" src="{{ img }}" alt="">{% else %}<span class="ea-toast__ic">{{ icon(ic or ('circle-alert' if tone == 'error' else 'info' if tone == 'info' else 'circle-check')) }}</span>{% endif %}<div><p class="ea-toast__title">{{ title }}</p>{% if text %}<p class="ea-toast__text">{{ text }}</p>{% endif %}</div><button class="ea-iconbtn" type="button" aria-label="{{ _('Mbyll njoftimin') }}" data-ea="toast-close">{{ icon('x', 'ea-icon--sm') }}</button></div>
+{%- endmacro %}
+
+{% macro empty(title, text, ic='search-x', actions=None, compact=False, theme=None, error=False) -%}
+<div class="ea-empty{{ ' ea-empty--compact' if compact }}"{% if theme %} data-theme="{{ theme }}"{% endif %}><span class="ea-empty__ic{{ ' ea-empty__ic--error' if error }}">{{ icon(ic) }}</span><h2 class="ea-empty__title">{{ title }}</h2><p class="ea-empty__text">{{ text }}</p>{% if actions %}<div class="ea-empty__actions">{{ actions }}</div>{% endif %}</div>
+{%- endmacro %}
+
+{# ui.field — keeps <id>-h / <id>-e for aria-describedby #}
+{% macro field(id, label, name=None, value='', type='text', placeholder='', help=None, error=None, required=False, optional=False, valid=False, span=False, select=None, selected=None, textarea=False, inputmode=None, auto=None, attrs='', disabled=False, ic=None, focus=False) -%}
+<div class="ea-field{{ ' is-invalid' if error }}{{ ' is-valid' if valid and not error }}{{ ' ea-span-2' if span }}"><label class="ea-field__label" for="{{ id }}">{{ label }}{% if optional %} <span class="ea-field__opt">({{ _('opsional') }})</span>{% endif %}</label>
+{%- if select is not none -%}
+<span class="ea-selectwrap"><select class="ea-select" id="{{ id }}"{% if name %} name="{{ name }}"{% endif %}{% if error %} aria-invalid="true" aria-describedby="{{ id }}-e"{% endif %}{{ attrs }}>{% for s in select %}{% if s is string %}<option{% if selected == s %} selected{% endif %}>{{ s }}</option>{% else %}<option value="{{ s[0] }}"{% if selected|string == s[0]|string %} selected{% endif %}>{{ s[1] }}</option>{% endif %}{% endfor %}</select>{{ icon('chevron-down') }}</span>
+{%- elif textarea -%}
+<textarea class="ea-textarea" id="{{ id }}"{% if name %} name="{{ name }}"{% endif %}{% if required %} required aria-required="true"{% endif %} placeholder="{{ placeholder }}"{% if error %} aria-invalid="true" aria-describedby="{{ id }}-e"{% endif %}{{ attrs }}>{{ value or '' }}</textarea>
+{%- else -%}
+{% if ic %}<span class="ea-inputwrap">{{ icon(ic) }}{% endif %}<input class="ea-input{{ ' is-focus' if focus }}" id="{{ id }}" type="{{ type }}" placeholder="{{ placeholder }}" value="{{ value if value is not none else '' }}"{% if name %} name="{{ name }}"{% endif %}{% if inputmode %} inputmode="{{ inputmode }}"{% endif %}{{ attrs }}{% if disabled %} disabled{% endif %}{% if required %} required aria-required="true"{% endif %}{% if auto %} autocomplete="{{ auto }}"{% endif %}{% if error %} aria-invalid="true"{% endif %} aria-describedby="{{ id }}{{ '-e' if error else '-h' }}">{% if ic %}</span>{% endif %}
+{%- endif -%}
+{% if help %}<p class="ea-field__help" id="{{ id }}-h">{{ help }}</p>{% endif %}<p class="ea-field__error" id="{{ id }}-e">{{ icon('circle-alert') }}{{ error or '' }}</p></div>
+{%- endmacro %}
+
+{# ui.pagination with real page numbers; window of pages around the current one #}
+{% macro pagination(page, pages, url_for_page, meta=True, per_page=24, unit=None) -%}
+<nav class="ea-pagination" aria-label="{{ _('Faqet') }}">{% if page > 1 %}<a href="{{ url_for_page(page - 1) }}" aria-label="{{ _('Faqja e mëparshme') }}">{{ icon('chevron-left') }}</a>{% else %}<a href="#" class="is-disabled" aria-label="{{ _('Faqja e mëparshme') }}" aria-disabled="true" tabindex="-1">{{ icon('chevron-left') }}</a>{% endif %}
+{%- for n in page_window(page, pages) -%}{% if n == '…' %}<span class="ea-pagination__gap">…</span>{% else %}<a href="{{ url_for_page(n) }}"{% if n == page %} aria-current="page"{% endif %}>{{ n }}</a>{% endif %}{% endfor -%}
+{% if page < pages %}<a href="{{ url_for_page(page + 1) }}" aria-label="{{ _('Faqja tjetër') }}">{{ icon('chevron-right') }}</a>{% else %}<a href="#" class="is-disabled" aria-label="{{ _('Faqja tjetër') }}" aria-disabled="true" tabindex="-1">{{ icon('chevron-right') }}</a>{% endif %}{% if meta %}<p class="ea-pagination__meta">{{ _('Faqja %(p)s nga %(n)s · %(k)s %(u)s për faqe', p=page, n=pages, k=per_page, u=unit or _('produkte')) }}</p>{% endif %}</nav>
+{%- endmacro %}
+
+{# ui.modal (static=False → closed until opened via data-ea="open-modal") #}
+{% macro modal(id, title, sub=None, wide=False, danger=False, open=False) -%}
+<div class="ea-modal{{ ' is-open' if open }}" role="presentation" id="{{ id }}" aria-hidden="{{ 'false' if open else 'true' }}"><div class="ea-dialog{{ ' ea-dialog--wide' if wide }}{{ ' ea-dialog--danger' if danger }}" role="dialog" aria-modal="true" aria-labelledby="dlg-t-{{ id }}"><div class="ea-dialog__head"><div class="ea-row" style="align-items:flex-start;gap:14px">{% if danger %}<span class="ea-dialog__danger-ic">{{ icon('triangle-alert') }}</span>{% endif %}<div><h2 class="ea-dialog__title" id="dlg-t-{{ id }}">{{ title }}</h2>{% if sub %}<p class="ea-dialog__sub">{{ sub }}</p>{% endif %}</div></div><button class="ea-iconbtn" type="button" aria-label="{{ _('Mbyll') }}" data-ea="close">{{ icon('x') }}</button></div>{{ caller() }}</div></div>
+{%- endmacro %}

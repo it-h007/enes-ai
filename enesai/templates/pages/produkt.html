@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% from "macros/ui.html" import crumbs, section_head with context %}
+{% from "macros/commerce.html" import gallery, pdp_info, product_grid with context %}
+{% block title %}{{ p.name }}{% endblock %}
+{% block description %}{{ (p.desc or p.name ~ ' · ' ~ p.pack)|truncate(150) }}{% endblock %}
+{% block main %}
+{# pages.product (20-pages.js:56) — no ratings (V1-02) #}
+<div class="ea-panelwrap"><div class="ea-container" style="padding-top:22px"><div class="ea-panel ea-panel--card" data-theme="light" style="margin-top:0">{{ crumbs([(_('Dyqani'), '/dyqani'), (p.cat_name, '/kategoria/' ~ p.cat_slug), (p.name,)]) }}<div class="ea-pdp" style="margin-top:20px">{{ gallery(p) }}{{ pdp_info(p, maxq) }}</div>{% if related %}<section style="margin-top:52px" aria-labelledby="rel-t">{{ section_head(_('Produkte të ngjashme'), _('Shiko kategorinë'), '/kategoria/' ~ p.cat_slug, None, 'rel-t') }}{{ product_grid(related, 5) }}</section>{% endif %}</div></div><div style="height:48px"></div></div>
+{% endblock %}
+{% block after %}<form id="ea-pdpform" method="post" action="/shporta/shto" hidden><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="next" value="{{ request.full_path }}"></form>{% endblock %}
