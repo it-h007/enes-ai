@@ -72,7 +72,7 @@ Kolonat: `sku, emri_sq, emri_en, kategoria, nenkategoria, marka, paketimi, cmimi
 .venv/bin/pip install -r requirements-dev.txt
 .venv/bin/python -m pytest -q          # 73 teste: rrugët, hyrja, lejet, ngarkimet, importi, kuponat (garë paralele), numrat e porosive, PDF, WhatsApp, etj.
 ```
-Kontrollet në shfletues (Playwright/Chromium): `tools/e2e_checkout.py`, `tools/shoot.py`, `tools/shoot_admin.py` (me `tools/devserver.sh`).
+Kontrollet në shfletues (Playwright/Chromium): `tools/e2e_checkout.py`, `tools/e2e_a11y.py`, `tools/e2e_admin.py`, `tools/shoot.py`, `tools/shoot_admin.py` (me `tools/devserver.sh`).
 
 ## 5. Integrime të çaktivizuara (dhe si aktivizohen)
 | Integrimi | Gjendja | Çfarë duhet |
