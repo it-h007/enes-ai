@@ -1,11 +1,12 @@
 """Checkout (/arka), coupon check API and order confirmation (/porosia/<nr>)."""
 import json
 import secrets
+import time
 
 from flask import (Blueprint, abort, current_app, flash, jsonify, redirect, render_template, request, send_file, session)
 
 from .i18n import _
-from .security import rate_limit
+from .security import bot_log, honeypot_tripped, rate_limit
 from .services import cart as cartsvc
 from .services import coupons, orders
 from .services import settings as st
@@ -59,6 +60,7 @@ def checkout():
             flash(_("Shporta juaj është bosh."), "info")
         return redirect("/shporta")
     if request.method == "GET":
+        session["co_t"] = int(time.time())   # when the form was shown (bot trap: humans need > 3 s)
         return render_template("pages/arka.html", **_ctx(lines))
 
     form = request.form
@@ -75,6 +77,11 @@ def checkout():
         return render_template("pages/arka.html", **_ctx(lines, None, {}, v, loc))
 
     rate_limit("order", 12, 600)
+    shown = session.get("co_t")
+    if honeypot_tripped(form) or (shown and time.time() - shown < current_app.config.get("CHECKOUT_MIN_SECONDS", 3)):
+        bot_log("checkout")
+        return render_template("pages/arka.html", **_ctx(lines, None, {}, v, loc, {}, True,
+                                                         {"title": _("Porosia nuk u dërgua"), "text": " " + _("Kontrolloni të dhënat dhe provoni sërish pas pak sekondash.")})), 422
     coupon, cstate = _coupon_from(code)
     if code and not coupon:
         cstate = {"error": "gone" if cstate.get("error") in ("used", "cancelled", "expired") else cstate.get("error"), "value": coupons.normalize(code)}

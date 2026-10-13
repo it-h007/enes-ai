@@ -7,7 +7,7 @@ from flask import Blueprint, flash, jsonify, redirect, render_template, request
 
 from .db import get_db
 from .i18n import _
-from .security import rate_limit
+from .security import rate_limit, honeypot_tripped, bot_log
 from .services import cart as cartsvc
 from .services import catalog
 from .services import settings as st
@@ -129,6 +129,9 @@ def search_api():
 def subscribe():
     rate_limit("newsletter", 10, 600)
     d = _data()
+    if honeypot_tripped(d):
+        bot_log("newsletter")   # answer like a success so the script learns nothing; nothing is stored
+        return (jsonify(ok=True), 200) if _is_fetch() else redirect(_safe_next("/") + "#newsletter")
     email = (d.get("email") or "").strip().lower()[:254]
     source = d.get("source") if d.get("source") in ("ballina", "arka", "ofertat") else "ballina"
     if not EMAIL_RE.match(email):

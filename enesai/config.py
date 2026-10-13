@@ -1,6 +1,8 @@
 """Configuration from environment variables (see .env.example). No secrets in code."""
 import os
+import re
 import secrets
+import string
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -34,6 +36,33 @@ def load_dotenv(path):
         os.environ.setdefault(k, v)
 
 
+GUESSABLE_ADMIN_PATHS = {"admin", "paneli", "panel", "administrator", "login", "dashboard", "wp-admin", "backend", "menaxhim", "staff"}
+
+
+def _admin_path(inst):
+    """The admin panel lives at a secret, random path (C-31 + client request): typing
+    /admin or /paneli after the domain only shows the normal 404 page.
+    ADMIN_PATH in .env wins; otherwise a random path is created once and kept in
+    instance/admin_path (outside git, never served)."""
+    env = os.environ.get("ADMIN_PATH", "").strip().strip("/")
+    if env.lower() in GUESSABLE_ADMIN_PATHS:
+        env = ""   # e.g. ADMIN_PATH=paneli from an older .env: never allow an easy-to-guess address
+    if env:
+        if not re.match(r"^[A-Za-z0-9._~-]{1,64}$", env):
+            raise RuntimeError("ADMIN_PATH: vetëm shkronja, shifra, “-”, “_”, “.”, “~” (pa “/”).")
+        return "/" + env
+    inst.mkdir(parents=True, exist_ok=True)
+    f = inst / "admin_path"
+    if not f.exists():
+        alphabet = string.ascii_lowercase + string.digits
+        f.write_text("paneli-" + "".join(secrets.choice(alphabet) for _ in range(16)))
+        try:
+            os.chmod(f, 0o600)
+        except OSError:
+            pass
+    return "/" + f.read_text().strip().strip("/")
+
+
 class Config:
     def __init__(self, **overrides):
         load_dotenv(BASE_DIR / ".env")
@@ -65,7 +94,11 @@ class Config:
         self.SESSION_COOKIE_SECURE = self.HTTPS
         self.PERMANENT_SESSION_LIFETIME = 60 * 60 * 24 * 30  # cart keeps for 30 days
         self.MAX_CONTENT_LENGTH = 21 * 1024 * 1024  # CSV ≤ 20 MB
-        self.ADMIN_PATH = "/" + os.environ.get("ADMIN_PATH", "paneli").strip("/")
+        self.ADMIN_PATH = _admin_path(inst)
+        self.ADMIN_SESSION_MAX_HOURS = _int("ADMIN_SESSION_MAX_HOURS", 12)
+        self.BACKUP_DIR = os.environ.get("BACKUP_DIR", str(inst / "backups"))
+        self.BACKUP_KEEP_DAYS = _int("BACKUP_KEEP_DAYS", 30)
+        self.CHECKOUT_MIN_SECONDS = _int("CHECKOUT_MIN_SECONDS", 3)   # bot trap: a person needs longer to fill the form
         self.LOGIN_MAX_FAILURES = _int("LOGIN_MAX_FAILURES", 6)
         self.LOGIN_LOCK_MINUTES = _int("LOGIN_LOCK_MINUTES", 15)
         self.MAX_QTY_PER_LINE = _int("MAX_QTY_PER_LINE", 20)

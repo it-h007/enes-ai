@@ -15,7 +15,7 @@ Teknologjia: Python 3 · Flask · SQLite · Jinja2 · ReportLab · Pillow · HTM
 2. **Shpaketoni ZIP-in** (kliku i djathtë › “Extract All…”) dhe hapni dosjen `enesai-flask`. Mos e hapni `nis.bat` direkt nga brenda ZIP-it — Windows nxjerr vetëm atë skedar dhe instalimi dështon (“requirements.txt” nuk gjendet).
 3. Klikoni dy herë **`nis.bat`** në dosjen e shpaketuar.
    - Herën e parë krijon mjedisin, instalon paketat dhe ju kërkon të krijoni **llogarinë e pronarit** (emri i përdoruesit + fjalëkalim i fortë, min. 12 shenja).
-   - Hapet shfletuesi te `http://127.0.0.1:5000`. Paneli: `http://127.0.0.1:5000/paneli`.
+   - Hapet shfletuesi te `http://127.0.0.1:5000`. **Adresa e panelit është sekrete** (p.sh. `http://127.0.0.1:5000/paneli-k3x9m2q8.../login`) dhe shfaqet në dritaren e `nis.bat`. Ruajeni si faqe të preferuar; e shihni sërish me `python run.py admin-url`. `/admin` ose `/paneli` japin “faqja nuk u gjet”.
    - **Nuk ka llogari “admin” të paracaktuar.** Hyni me emrin dhe fjalëkalimin që zgjodhët vetë te pronari (fjalëkalimi nuk shfaqet ndërsa shkruani — kjo është normale).
    - **Harruat fjalëkalimin ose hyrja u bllokua?** Klikoni dy herë **`fjalekalimi.bat`** (ose `python run.py reset-password`): tregon llogaritë, vendos fjalëkalim të ri dhe heq bllokimin. Funksionon vetëm në kompjuterin ku ndodhet aplikacioni.
 
@@ -60,7 +60,7 @@ Vendime që i takojnë marketit (lista e plotë në `IMPLEMENTATION_STATUS.md`):
 | Porosia | një transaksion SQLite | Numri `EA-VVVV-NNNNN` (rritet vetë për çdo vit), kuponi shënohet “i përdorur” në mënyrë atomike, stoku ulet, të dhënat e shitësit ruhen si “fotografi” e faturës. |
 | Konfirmimi + PDF | lidhje me token sekret (30 ditë) | Pa token → 404. PDF me ReportLab, lidhje e klikueshme dhe QR për Google Maps. |
 | WhatsApp | `wa.me/<numri i marketit>?text=…` | Klienti shtyp “Dërgo” në WhatsApp. Kjo regjistrohet si **“hapur”**, jo si “dërguar”. Dërgimi automatik i PDF-së kërkon WhatsApp Business API (shih §5). |
-| Paneli | `/paneli` | Pronari ka çdo leje dhe nuk fshihet. Menaxherët/Operatorët marrin seksione nga matrica. **Kuponat: vetëm Pronari dhe Menaxherët.** |
+| Paneli | adresë sekrete (`python run.py admin-url`) | Pronari ka çdo leje dhe nuk fshihet. Menaxherët/Operatorët marrin seksione nga matrica. **Kuponat: vetëm Pronari dhe Menaxherët.** |
 
 ### Rolet dhe lejet
 Seksionet: Porositë · Faturat · Produktet · Importi CSV · Kategoritë · Abonentët · Ofertat e email-it · Kuponat · Reklamat & Njoftimet · Raportet · Regjistri · Cilësimet. Vetëm pronari: Operatorët dhe “Fshi të gjitha produktet”. Çdo veprim kontrollohet në server (403 + regjistër), jo vetëm duke fshehur butonat.
@@ -76,10 +76,28 @@ Paneli › Produktet › **Importo Excel / CSV**. Pranohet **direkt skedari i pr
 
 ---
 
+## Siguria (shkurt)
+- **Paneli** ka adresë sekrete të rastësishme; vlerat e lehta (`admin`, `paneli`…) te `.env` injorohen.
+- **Fjalëkalimet**: min. 12 shenja me shkronja dhe shifra; refuzohen të zakonshmet (“enesai”, “admin”, “123456”…). 6 gabime → bllokim 15 min.
+- **Sesioni** mbyllet pas 30 min pa aktivitet dhe gjithsesi pas 12 orësh; një cookie e kopjuar në shfletues tjetër nuk pranohet.
+- **Baza e të dhënave**: të gjitha pyetjet me parametra (pa SQL injection) — testohet me sulme të njohura në çdo formular; skedari nuk ka port në internet dhe nuk shërbehet kurrë. `.env`, baza, faturat dhe importet japin 404 nga interneti (të testuara).
+- **Botët**: fushë-kurth e padukshme + kohë minimale te arka dhe abonimi, kufizim kërkesash; pa CAPTCHA.
+- **Kopje rezervë** çdo ditë automatikisht (shih më poshtë).
+
+## Kopjet rezervë
+Kur faqja është e ndezur, krijohet **një kopje në ditë** te `instance/backups/` (ZIP: baza + fotot + faturat), ruhen 30 ditë. Kopje tani: **`backup.bat`** (ose `python run.py backup`). Kopjojini herë pas here edhe jashtë kompjuterit (USB / Google Drive); në server bëhet automatikisht (DEPLOYMENT.md §4).
+**Rikthimi:** ndalni faqen → hapni ZIP-in → `enesai.sqlite3` vendoset te `instance/`, `uploads/` te `instance/uploads`, `private/invoices` te `instance/private/invoices` → nisni faqen.
+
+## Ofertat me email
+Paneli › **Ofertat e Email-it**: shkruani subjektin dhe tekstin (opsionale produktet në ofertë) → **Përgatit email-in** → për çdo grup shtypni **“Hap në Gmail”** (ose “Programi i email-it”) → email-i hapet gati, marrësit janë te **BCC** (nuk e shohin njëri-tjetrin) → **Send**.
+- Marrës janë **vetëm** abonentët dhe klientët që shënuan “Dua oferta me email” te arka (pëlqimi i kërkuar me ligj).
+- Grupet kanë deri në 45 marrës (kufiri i lidhjeve të email-it). Gmail i zakonshëm lejon rreth 500 marrës në ditë.
+- Kush përgjigjet “STOP” hiqet te Abonentët. Më vonë, me domain-in, mund të lidhet një shërbim si Brevo (plani falas ~300 email/ditë) për dërgim automatik.
+
 ## 4. Testet
 ```bash
 .venv/bin/pip install -r requirements-dev.txt
-.venv/bin/python -m pytest -q          # 82 teste: rrugët, hyrja, lejet, ngarkimet, importi, kuponat (garë paralele), numrat e porosive, PDF, WhatsApp, etj.
+.venv/bin/python -m pytest -q          # 117 teste: rrugët, hyrja, lejet, ngarkimet, importi, kuponat (garë paralele), numrat e porosive, PDF, WhatsApp, etj.
 ```
 Kontrollet në shfletues (Playwright/Chromium): `tools/e2e_checkout.py`, `tools/e2e_a11y.py`, `tools/e2e_admin.py`, `tools/shoot.py`, `tools/shoot_admin.py` (me `tools/devserver.sh`).
 

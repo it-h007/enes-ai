@@ -191,7 +191,7 @@ def test_confirmation_and_pdf_need_token(client, app):
     assert other.get("/porosia/%s?t=%s" % (nr, "x" * 32)).status_code == 404
     assert other.get("/porosia/%s/fatura.pdf" % nr).status_code == 404
     assert other.get("/porosia/%s/fatura.pdf?t=%s" % (nr, token)).status_code == 200  # link works without the session (sharable by the customer)
-    assert other.get("/paneli/faturat/%s.pdf" % nr).status_code == 302  # admin route requires login
+    assert other.get("/paneli-test/faturat/%s.pdf" % nr).status_code == 302  # admin route requires login
 
 
 def test_pdf_has_clickable_maps_link_qr_and_unicode(client, app):

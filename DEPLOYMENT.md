@@ -30,7 +30,9 @@ www.enesai.al {
 ```
 
 ## 2. Environment (`.env`, never in git)
-`ENESAI_ENV=production`, `ENESAI_HTTPS=true`, a long random `SECRET_KEY`, `PUBLIC_BASE_URL=https://…`. Optional: `ADMIN_PATH` (obscurity only), `MAP_TILE_URL` (production tile provider), WhatsApp API keys. Rotating `SECRET_KEY` logs everyone out and empties carts.
+`ENESAI_ENV=production`, `ENESAI_HTTPS=true`, a long random `SECRET_KEY`, `PUBLIC_BASE_URL=https://…`. Leave `ADMIN_PATH` empty: a random secret admin path is created once in `instance/admin_path` (print it with `python run.py admin-url`); easy guesses are ignored. Optional: `MAP_TILE_URL` (production tile provider), WhatsApp API keys. Rotating `SECRET_KEY` logs everyone out and empties carts.
+
+`chmod 600 .env` and `chmod 700 instance` — only the service user may read them (the app warns at start-up otherwise). The reverse proxy must only forward to the app; never point a web server's document root at the project folder.
 
 ## 3. Files and permissions
 - `instance/enesai.sqlite3` — the database (orders, customers, settings).
@@ -39,6 +41,16 @@ www.enesai.al {
 - Owner of `instance/` = the service user only (`chmod 700 instance`). The web server must not serve `instance/` as static files.
 
 ## 4. Backup and restore
+**Automatic:** while `run.py` runs it creates one ZIP per day in `instance/backups/` (consistent SQLite copy via the online backup API + uploads + invoice PDFs) and keeps `BACKUP_KEEP_DAYS` (30, always at least the 7 newest). Manual: `python run.py backup`.
+
+**Off-site copy (required):** a backup on the same server does not survive a lost server. Sync the folder every night with `rclone` to a storage bucket (e.g. Backblaze B2) or Google Drive:
+```bash
+# once: rclone config  (create remote "offsite")
+# cron, 03:30 every night
+30 3 * * * rclone copy /srv/enesai/instance/backups offsite:enesai-backups --max-age 48h
+```
+
+Manual alternative (SQLite CLI):
 SQLite runs in WAL mode; use the online backup API (safe while running):
 ```bash
 # daily, keep 30 days (cron)
@@ -52,6 +64,30 @@ Windows: `python -c "import sqlite3;s=sqlite3.connect('instance/enesai.sqlite3')
 
 Before “Fshi të gjitha produktet” the admin offers a catalogue CSV download; a database backup is still recommended.
 
+## 4b. Firewall and brute-force protection
+```bash
+ufw default deny incoming && ufw allow OpenSSH && ufw allow 80,443/tcp && ufw enable
+apt install fail2ban
+```
+`/etc/fail2ban/filter.d/enesai.conf`:
+```
+[Definition]
+failregex = admin login failed ip=<HOST>$
+            bot trap: \S+ from <HOST>$
+```
+`/etc/fail2ban/jail.d/enesai.conf` (log = the service journal, or redirect run.py output to a file):
+```
+[enesai]
+enabled  = true
+backend  = systemd
+journalmatch = _SYSTEMD_UNIT=enesai.service
+filter   = enesai
+maxretry = 10
+findtime = 10m
+bantime  = 1h
+```
+SSH: key login only (`PasswordAuthentication no`). Keep the OS updated (`unattended-upgrades`).
+
 ## 5. Updates
 `git pull` → `pip install -r requirements.txt` → restart. Migrations in `enesai/migrations/` run automatically at start (forward-only, each in a transaction). Back up first.
 
@@ -64,7 +100,9 @@ Before “Fshi të gjitha produktet” the admin offers a catalogue CSV download
 - [ ] Settings complete: legal name, NIPT, WhatsApp number, address, phones, hours, delivery fee/threshold (confirmed with the market).
 - [ ] `/kushtet` text reviewed by a lawyer/accountant; the “tekst model” alert removed only after review (template `pages/kushtet.html`).
 - [ ] Production map tile provider configured (`MAP_TILE_URL`), attribution correct, CSP allows that host (automatic).
-- [ ] Backups scheduled and one restore tested.
+- [ ] Daily backups appear in `instance/backups/`, the off-site copy (rclone) works, and one restore was tested.
+- [ ] Admin address printed with `python run.py admin-url` and saved by the owner; `/admin` and `/paneli` return 404.
+- [ ] `ufw` + `fail2ban` active; `.env` is `chmod 600`.
 - [ ] Admin login lockout tested (6 failures → 15 min) and audit log visible in “Regjistri”.
 - [ ] Real-device tests: GPS on Android/iOS, WhatsApp with a long prefilled text, PDF printing.
 - [ ] `ADULT_CHECKOUT_ENABLED` stays `false` until alcohol rules are confirmed.

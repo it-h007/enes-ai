@@ -1,7 +1,8 @@
-"""Admin: Abonentët, Ofertat e email-it (prepare only — no SMTP sending), Reklamat & Njoftimet, Raportet."""
+"""Admin: Abonentët, Ofertat e email-it (opened ready in Gmail / the mail app, grouped BCC — no SMTP), Reklamat & Njoftimet, Raportet."""
 import json
 import re
 from datetime import date, timedelta
+from urllib.parse import quote
 
 from flask import abort, current_app, flash, g, redirect, render_template, request, url_for
 
@@ -77,6 +78,45 @@ def subscriber_unsub(sid):
 
 # ---------------- e-mail offers ----------------
 
+MAILTO_MAX = 1900          # safe length for mailto: links (Windows / Outlook cut around 2 000)
+GROUP_MAX = 45             # recipients per message (also keeps mail providers' spam filters calm)
+
+
+def _plain_text(c, picks, base):
+    """The email as plain text (mailto/Gmail cannot carry HTML)."""
+    lines = [c["intro"].strip(), ""] if c.get("intro") else []
+    for p in picks:
+        lines.append("• %s — %s%s" % (p["name"], lek(p["price"]).replace("\u00a0", " "),
+                                      (" (më parë %s)" % lek(p["old"]).replace("\u00a0", " ")) if p.get("old") else ""))
+    if picks:
+        lines.append("")
+    lines += ["%s: %s/oferta" % (c.get("button_text") or "Shiko ofertat", base), "", "ENES’AI Super Market",
+              "", "Nëse nuk doni më email nga ne, përgjigjuni me fjalën STOP."]
+    return "\n".join(lines).strip()
+
+
+def _send_groups(emails, subject, body, to_addr):
+    """Split the BCC list into groups whose mailto: link stays short enough to open everywhere.
+    Each group gets a Gmail-in-browser link and a mailto: link (Outlook / Windows Mail)."""
+    q = lambda v: quote(v, safe="")
+    fixed = len("mailto:%s?subject=%s&body=%s&bcc=" % (q(to_addr), q(subject), q(body)))
+    groups, cur, size = [], [], fixed
+    for e in emails:
+        add = len(q(e)) + 3
+        if cur and (len(cur) >= GROUP_MAX or size + add > MAILTO_MAX):
+            groups.append(cur); cur, size = [], fixed
+        cur.append(e); size += add
+    if cur:
+        groups.append(cur)
+    out = []
+    for i, gr in enumerate(groups):
+        bcc = ",".join(gr)
+        out.append({"n": i + 1, "count": len(gr), "first": gr[0], "last": gr[-1],
+                    "mailto": "mailto:%s?subject=%s&body=%s&bcc=%s" % (q(to_addr), q(subject), q(body), q(bcc)),
+                    "gmail": "https://mail.google.com/mail/?view=cm&fs=1&to=%s&su=%s&body=%s&bcc=%s" % (q(to_addr), q(subject), q(body), q(bcc))})
+    return out, fixed > MAILTO_MAX - 60
+
+
 def _offer_products(ids):
     if not ids:
         return []
@@ -119,7 +159,7 @@ def email_offers():
                 elif action == "sent":
                     con.execute("UPDATE email_campaigns SET status='sent', sent_at=? WHERE id=? AND status='prepared'", (t, cid))
                     audit.log("Shënoi email-in si të dërguar", subject, area="email", con=con)
-            flash({"prepare": "Email-i u përgatit. Kopjoni HTML-në dhe listën BCC te shërbimi juaj i email-it.", "sent": "U shënua si i dërguar."}.get(action, "Drafti u ruajt."), "success")
+            flash({"prepare": "Email-i është gati. Shtypni “Hap në Gmail” (ose programin e email-it) për çdo grup, pastaj Send.", "sent": "U shënua si i dërguar."}.get(action, "Drafti u ruajt."), "success")
             return redirect(url_for("admin.email_offers", id=cid))
         camp_form = {"subject": subject, "intro": intro, "button_text": button, "product_ids": json.dumps(ids), "status": "draft", "id": cid}
     else:
@@ -130,9 +170,15 @@ def email_offers():
     n_active = con.execute("SELECT COUNT(*) FROM subscribers WHERE active=1").fetchone()[0]
     base = current_app.config.get("PUBLIC_BASE_URL") or request.host_url.rstrip("/")
     html = render_template("email/offer.html", c=camp_form, picks=picks, base=base) if camp_form.get("id") else ""
-    bcc = ", ".join(r[0] for r in con.execute("SELECT email FROM subscribers WHERE active=1 ORDER BY id")) if camp_form["status"] in ("prepared", "sent") else ""
+    ready = camp_form["status"] in ("prepared", "sent")
+    emails = [r[0] for r in con.execute("SELECT email FROM subscribers WHERE active=1 ORDER BY id")] if ready else []
+    bcc = ", ".join(emails)
+    from ..services import settings as st
+    to_addr = st.all_settings().get("email", "") or ""
+    text = _plain_text(camp_form, picks, base) if ready else ""
+    groups, too_long = _send_groups(emails, camp_form["subject"], text, to_addr) if ready else ([], False)
     return page("admin/email_offers.html", "mail", "Ofertat e Email-it", "Paneli › Marketingu", c=camp_form, picks=picks, offers=offers, history=history,
-                n_active=n_active, errors=errors, email_html=html, bcc=bcc, base=base)
+                n_active=n_active, errors=errors, email_html=html, bcc=bcc, base=base, groups=groups, too_long=too_long, plain=text, to_addr=to_addr)
 
 
 # ---------------- announcements / ads / jobs ----------------

@@ -33,3 +33,6 @@ a.ea-rail__item:focus-visible, a.ea-chip:focus-visible, a.ea-invlist__item:focus
    Only shown where the grid has 7 columns; 5 and 4 columns and the phone swipe divide 20 evenly. */
 .ea-catcard--fill7 { display: none; }
 @container site (min-width: 1180px) { .ea-catgrid > .ea-catcard--fill7 { display: flex; } }
+
+/* Bot trap (honeypot): invisible to people and screen readers, filled in by form-spamming scripts. */
+.ea-hp { position: absolute !important; left: -10000px !important; top: auto; width: 1px; height: 1px; overflow: hidden; }

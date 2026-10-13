@@ -35,12 +35,15 @@ def login():
         username = (request.form.get("username") or "").strip()
         row, err = auth.attempt(username, request.form.get("password") or "", client_ip(), request.user_agent.string)
         if row:
-            u = urlparse(nxt)
-            safe = nxt if nxt.startswith(current_app.config["ADMIN_PATH"]) and not u.netloc and not u.scheme else url_for("admin.dashboard")
-            return redirect(safe)
+            return redirect(_safe_next(nxt))
     status = 429 if err == "locked" else (401 if err else 200)
     return render_template("admin/login.html", error=err, username=username, next=nxt, expired=bool(request.args.get("skadoi")),
                            no_owner=not auth.owner_exists()), status
+
+
+def _safe_next(nxt):
+    u = urlparse(nxt or "")
+    return nxt if nxt and nxt.startswith(current_app.config["ADMIN_PATH"]) and not u.netloc and not u.scheme else url_for("admin.dashboard")
 
 
 @bp.post("/dil")

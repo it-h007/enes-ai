@@ -112,7 +112,7 @@ def phone_digits(v):
 
 PHONE_AL = re.compile(r"^(?:\+355|00355|0)6[5-9]\d{7}$")
 PHONE_INTL = re.compile(r"^\+\d{8,15}$")
-EMAIL_RE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]{2,}$")
+EMAIL_RE = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9._%+-]{0,62}[A-Za-z0-9_+-])?@[A-Za-z0-9](?:[A-Za-z0-9-]{0,62}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,62}[A-Za-z0-9])?)*\.[A-Za-z]{2,24}$")
 
 
 def clean_phone(v):

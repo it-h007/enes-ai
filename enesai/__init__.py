@@ -19,6 +19,19 @@ NAV = [
 ]
 
 
+def _security_warnings(app):
+    """Loud start-up warnings for risky production settings (nothing secret is logged)."""
+    import os
+    import stat
+    from .config import BASE_DIR, GUESSABLE_ADMIN_PATHS
+    if os.environ.get("ADMIN_PATH", "").strip().strip("/").lower() in GUESSABLE_ADMIN_PATHS:
+        app.logger.warning("ADMIN_PATH në .env është e lehtë për t'u gjetur dhe u injorua — paneli është te rruga sekrete (python run.py admin-url).")
+    env = BASE_DIR / ".env"
+    if app.config.get("ENV") == "production" and env.exists() and os.name == "posix":
+        if env.stat().st_mode & (stat.S_IRWXG | stat.S_IRWXO):
+            app.logger.warning(".env lexohet nga përdorues të tjerë të serverit — ekzekutoni: chmod 600 .env")
+
+
 def create_app(**overrides):
     cfg = Config(**overrides)
     app = Flask(__name__, instance_path=str(cfg.INSTANCE_DIR), instance_relative_config=False)
@@ -33,6 +46,7 @@ def create_app(**overrides):
     app.jinja_env.filters.update(lek=lek, date=fmt_date, time=fmt_time, dt=fmt_dt, num=num)
 
     _logging(app)
+    _security_warnings(app)
 
     with app.app_context():
         con = dbm.connect(app.config["DATABASE"])

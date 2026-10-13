@@ -23,7 +23,8 @@ echo Fjalekalimi nuk shfaqet nderkohe qe shkruani - kjo eshte normale.
 if errorlevel 1 (echo Provoni perseri. & goto :pronari)
 :nisja
 echo.
-echo Faqja: http://127.0.0.1:5000   Paneli: http://127.0.0.1:5000/paneli
+echo Faqja: http://127.0.0.1:5000
+".venv\Scripts\python.exe" run.py admin-url
 start "" http://127.0.0.1:5000
 ".venv\Scripts\python.exe" run.py
 pause

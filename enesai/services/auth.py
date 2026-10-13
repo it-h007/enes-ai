@@ -33,7 +33,9 @@ SECTION_KEYS = [k for k, _ in SECTIONS]
 OWNER_ONLY = ("operators", "products_delete_all")
 ROLE_LABEL = {"owner": "Pronar", "manager": "Menaxher/e", "operator": "Operator/e"}
 _DUMMY_HASH = generate_password_hash("not-a-real-password-" + secrets.token_hex(8))
-MIN_PW = 10
+MIN_PW = 12
+COMMON_PASSWORDS = ("password", "passw0rd", "fjalekalim", "123456", "654321", "qwerty", "asdfgh", "enesai", "enes", "admin", "paneli",
+                    "market", "vlore", "vlora", "shqiperi", "albania", "abc123", "111111", "000000", "iloveyou", "welcome")
 
 
 def hash_password(pw):
@@ -45,8 +47,11 @@ def password_problem(pw, username=""):
         return "Fjalëkalimi duhet të ketë të paktën %d shenja." % MIN_PW
     if username and username.lower() in pw.lower():
         return "Fjalëkalimi nuk duhet të përmbajë emrin e përdoruesit."
-    if pw.isdigit() or pw.isalpha():
-        return "Përdorni shkronja dhe shifra (ose shenja)."
+    if not (any(c.isalpha() for c in pw) and any(c.isdigit() for c in pw)):
+        return "Përdorni shkronja dhe shifra (mundësisht edhe një shenjë si ! ? # -)."
+    low = pw.lower()
+    if any(w in low for w in COMMON_PASSWORDS) or len(set(low)) < 6:
+        return "Fjalëkalimi është shumë i zakonshëm ose i thjeshtë (p.sh. përmban “enesai”, “admin”, “123456”). Zgjidhni diçka që nuk lidhet me dyqanin."
     return None
 
 
@@ -58,12 +63,13 @@ def create_owner(username, name, password, con=None):
     if not username or not username.replace(".", "").replace("_", "").isalnum():
         return False, "Emri i përdoruesit: vetëm shkronja, shifra, pikë ose _."
     prob = password_problem(password, username)
-    if prob or len(password) < 12:
-        return False, prob or "Për pronarin përdorni të paktën 12 shenja."
+    if prob:
+        return False, prob
     con.execute("INSERT INTO operators(name, username, password_hash, role, active, must_change_password, created_at) VALUES (?,?,?, 'owner', 1, 0, ?)",
                 (name.strip() or "Pronari", username, hash_password(password), now_iso()))
     audit.log("Krijoi pronarin", "@" + username, area="operators", tone="new", con=con, operator=False)
-    return True, "Pronari u krijua. Hyni te %s/login" % current_app.config["ADMIN_PATH"]
+    return True, ("Pronari u krijua.\nPaneli: http://127.0.0.1:5000%s/login\nKjo adresë është sekrete — ruajeni (p.sh. si faqe të preferuar). "
+                  "E shihni sërish me: python run.py admin-url" % current_app.config["ADMIN_PATH"])
 
 
 def owner_exists(con=None):
@@ -98,6 +104,7 @@ def attempt(username, password, ip, ua=""):
     if not row or not ok:
         con.execute("INSERT INTO login_attempts(username, ip, at, success) VALUES (?,?,?,0)", (username, ip, now_iso()))
         audit.log("Hyrje e dështuar", "@" + username, area="auth", tone="danger", con=con, operator=False)
+        current_app.logger.warning("admin login failed ip=%s", ip)   # for fail2ban (no username/password logged)
         return None, ("locked" if locked(username, ip, con) else "invalid")
     if not row["active"]:
         con.execute("INSERT INTO login_attempts(username, ip, at, success) VALUES (?,?,?,0)", (username, ip, now_iso()))
@@ -147,10 +154,18 @@ def current_operator():
     if not sid:
         return None
     con = get_db()
-    r = con.execute("""SELECT s.id AS sid, s.last_seen, o.* FROM admin_sessions s JOIN operators o ON o.id = s.operator_id
-                       WHERE s.id = ?""", (sid,)).fetchone()
+    r = con.execute("""SELECT s.id AS sid, s.last_seen, s.created_at AS s_created, s.user_agent AS s_ua, o.* FROM admin_sessions s
+                       JOIN operators o ON o.id = s.operator_id WHERE s.id = ?""", (sid,)).fetchone()
     if not r or not r["active"]:
         session.pop("admin_sid", None)
+        return None
+    created = parse_dt(r["s_created"])
+    too_old = created is None or now() - created > timedelta(hours=current_app.config.get("ADMIN_SESSION_MAX_HOURS", 12))
+    if too_old or (r["s_ua"] or "") != (request.user_agent.string or "")[:200]:
+        # absolute lifetime; a copied session cookie used from another browser is refused
+        con.execute("DELETE FROM admin_sessions WHERE id = ?", (sid,))
+        session.pop("admin_sid", None)
+        g.session_expired = True
         return None
     timeout = st.int_setting("session_timeout", 30)
     last = parse_dt(r["last_seen"])
@@ -233,8 +248,6 @@ def reset_password(username, new, con=None):
     prob = password_problem(new, username)
     if prob:
         return prob
-    if row["role"] == "owner" and len(new) < 12:
-        return "Për pronarin përdorni të paktën 12 shenja."
     with transaction(con):
         con.execute("UPDATE operators SET password_hash=?, must_change_password=0, active=1 WHERE id=?",
                     (hash_password(new), row["id"]))

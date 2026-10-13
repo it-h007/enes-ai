@@ -1,7 +1,7 @@
 #!/bin/sh
 # Fresh demo database + dev owner (dev only!) + dev server on :5055 (for browser checks)
 pkill -f "[p]ython run.py" 2>/dev/null; sleep 0.5
-export ENESAI_INSTANCE=${ENESAI_INSTANCE:-/tmp/ea-dev} PORT=5055 PYTHONPATH=.
+export ENESAI_INSTANCE=${ENESAI_INSTANCE:-/tmp/ea-dev} PORT=5055 PYTHONPATH=. ADMIN_PATH=paneli-test
 rm -rf "$ENESAI_INSTANCE"
 .venv/bin/python seed.py >/dev/null 2>&1
 .venv/bin/python -c "

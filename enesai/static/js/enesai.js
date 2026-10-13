@@ -503,7 +503,7 @@
       f.classList.remove('is-error', 'is-success', 'is-duplicate');
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v)) { f.classList.add('is-error'); inp.setAttribute('aria-invalid', 'true'); inp.focus(); return; }
       inp.removeAttribute('aria-invalid'); btn.classList.add('is-loading'); btn.setAttribute('aria-busy', 'true');
-      post('/abonohu', { email: v, source: (f.querySelector('input[name="source"]') || {}).value || 'ballina' }).then(function (d) {
+      post('/abonohu', { email: v, source: (f.querySelector('input[name="source"]') || {}).value || 'ballina', website: (f.querySelector('input[name="website"]') || {}).value || '' }).then(function (d) {
         btn.classList.remove('is-loading'); btn.removeAttribute('aria-busy');
         if (d.ok) { f.classList.add('is-success'); inp.value = ''; } else if (d.error === 'duplicate') f.classList.add('is-duplicate'); else if (d.error === 'invalid') { f.classList.add('is-error'); inp.focus(); } else toast({ tone: 'error', title: T.error, text: T.retry });
       }).catch(function () { btn.classList.remove('is-loading'); btn.removeAttribute('aria-busy'); netErr(); });

@@ -302,10 +302,8 @@ def news_detail(aid):
 
 @bp.get("/robots.txt")
 def robots():
-    admin = current_app.config["ADMIN_PATH"]
+    # The admin path is secret and is never listed here (it sends X-Robots-Tag: noindex itself).
     lines = ["User-agent: *", "Disallow: /arka", "Disallow: /porosia/", "Disallow: /shporta", "Disallow: /api/"]
-    if admin == "/paneli":  # a custom (obscured) admin path is not advertised here
-        lines.append("Disallow: /paneli")
     lines.append("Sitemap: " + _abs("/sitemap.xml"))
     return current_app.response_class("\n".join(lines) + "\n", mimetype="text/plain")
 

@@ -12,9 +12,9 @@ def _db():
 
 
 def test_admin_requires_login(client):
-    for p in ("/paneli/", "/paneli/produktet", "/paneli/porosite", "/paneli/cilesimet", "/paneli/kuponat"):
+    for p in ("/paneli-test/", "/paneli-test/produktet", "/paneli-test/porosite", "/paneli-test/cilesimet", "/paneli-test/kuponat"):
         r = client.get(p)
-        assert r.status_code == 302 and "/paneli/login" in r.headers["Location"]
+        assert r.status_code == 302 and "/paneli-test/login" in r.headers["Location"]
 
 
 def test_login_wrong_and_lockout(client, app):
@@ -31,9 +31,9 @@ def test_login_wrong_and_lockout(client, app):
 
 def test_login_and_logout_revokes_session(client):
     assert login(client).status_code == 302
-    assert client.get("/paneli/").status_code == 200
-    client.post("/paneli/dil", data={"csrf_token": csrf(client, "/paneli/")})
-    assert client.get("/paneli/").status_code == 302
+    assert client.get("/paneli-test/").status_code == 200
+    client.post("/paneli-test/dil", data={"csrf_token": csrf(client, "/paneli-test/")})
+    assert client.get("/paneli-test/").status_code == 302
 
 
 def test_owner_bootstrap_only_once(app):
@@ -47,15 +47,15 @@ def test_operator_permissions_enforced_server_side(app):
     make_operator(app, "dritan", "operator", ["products", "coupons"])  # coupons must be ignored for operators
     c = app.test_client()
     login(c, "dritan", "Operator-Pass-77")
-    assert c.get("/paneli/produktet").status_code == 200
-    assert c.get("/paneli/porosite").status_code == 403
-    assert c.get("/paneli/operatoret").status_code == 403
-    assert c.get("/paneli/cilesimet").status_code == 403
-    r = c.get("/paneli/kuponat")
+    assert c.get("/paneli-test/produktet").status_code == 200
+    assert c.get("/paneli-test/porosite").status_code == 403
+    assert c.get("/paneli-test/operatoret").status_code == 403
+    assert c.get("/paneli-test/cilesimet").status_code == 403
+    r = c.get("/paneli-test/kuponat")
     assert r.status_code == 403 and "Nuk keni leje" in r.text
-    tok = csrf(c, "/paneli/produktet")
-    assert c.post("/paneli/kuponat", data={"csrf_token": tok, "code": "HACK1", "pct": "50"}).status_code == 403
-    assert c.post("/paneli/kuponat/VLORE10/anulo", data={"csrf_token": tok}).status_code == 403
+    tok = csrf(c, "/paneli-test/produktet")
+    assert c.post("/paneli-test/kuponat", data={"csrf_token": tok, "code": "HACK1", "pct": "50"}).status_code == 403
+    assert c.post("/paneli-test/kuponat/VLORE10/anulo", data={"csrf_token": tok}).status_code == 403
     with app.app_context():
         assert not _db().execute("SELECT 1 FROM coupons WHERE code='HACK1'").fetchone()
         assert _db().execute("SELECT COUNT(*) FROM audit_log WHERE action='Akses i ndaluar'").fetchone()[0] >= 4
@@ -65,14 +65,14 @@ def test_manager_can_create_and_cancel_coupon(app):
     make_operator(app, "elira", "manager", ["coupons", "orders"])
     c = app.test_client()
     login(c, "elira", "Operator-Pass-77")
-    tok = csrf(c, "/paneli/kuponat")
-    r = c.post("/paneli/kuponat", data={"csrf_token": tok, "code": "verifikim25", "pct": "25", "action": "create"})
+    tok = csrf(c, "/paneli-test/kuponat")
+    r = c.post("/paneli-test/kuponat", data={"csrf_token": tok, "code": "verifikim25", "pct": "25", "action": "create"})
     assert r.status_code == 200 and "VERIFIKIM25" in r.text
-    r = c.post("/paneli/kuponat", data={"csrf_token": tok, "code": "VERIFIKIM25", "pct": "25", "action": "create"})
+    r = c.post("/paneli-test/kuponat", data={"csrf_token": tok, "code": "VERIFIKIM25", "pct": "25", "action": "create"})
     assert r.status_code == 422 and "ekziston" in r.text
-    r = c.post("/paneli/kuponat", data={"csrf_token": tok, "code": "ab", "pct": "95", "action": "create"})
+    r = c.post("/paneli-test/kuponat", data={"csrf_token": tok, "code": "ab", "pct": "95", "action": "create"})
     assert r.status_code == 422
-    c.post("/paneli/kuponat/VERIFIKIM25/anulo", data={"csrf_token": tok})
+    c.post("/paneli-test/kuponat/VERIFIKIM25/anulo", data={"csrf_token": tok})
     with app.app_context():
         row = _db().execute("SELECT status, created_by_name FROM coupons WHERE code='VERIFIKIM25'").fetchone()
         assert row["status"] == "cancelled" and row["created_by_name"] == "Elira"
@@ -82,15 +82,15 @@ def test_owner_cannot_be_deleted_or_disabled(client, app):
     login(client)
     with app.app_context():
         oid = _db().execute("SELECT id FROM operators WHERE role='owner'").fetchone()[0]
-    tok = csrf(client, "/paneli/operatoret")
-    assert client.post("/paneli/operatoret/%d/fshi" % oid, data={"csrf_token": tok}).status_code == 403
-    assert client.post("/paneli/operatoret/%d/aktiv" % oid, data={"csrf_token": tok}).status_code == 403
+    tok = csrf(client, "/paneli-test/operatoret")
+    assert client.post("/paneli-test/operatoret/%d/fshi" % oid, data={"csrf_token": tok}).status_code == 403
+    assert client.post("/paneli-test/operatoret/%d/aktiv" % oid, data={"csrf_token": tok}).status_code == 403
 
 
 def test_operator_create_requires_password_change(client, app):
     login(client)
-    tok = csrf(client, "/paneli/operatoret")
-    r = client.post("/paneli/operatoret", data={"csrf_token": tok, "name": "Ana Lika", "username": "ana.l", "password": "Perkohshem-123",
+    tok = csrf(client, "/paneli-test/operatoret")
+    r = client.post("/paneli-test/operatoret", data={"csrf_token": tok, "name": "Ana Lika", "username": "ana.l", "password": "Perkohshem-123",
                                                 "role": "operator", "active": "1", "perms": ["orders", "coupons"]})
     assert r.status_code == 302
     with app.app_context():
@@ -98,31 +98,31 @@ def test_operator_create_requires_password_change(client, app):
         assert perms == {"orders"}
     c2 = app.test_client()
     login(c2, "ana.l", "Perkohshem-123")
-    assert "/paneli/fjalekalimi" in c2.get("/paneli/porosite").headers["Location"]
+    assert "/paneli-test/fjalekalimi" in c2.get("/paneli-test/porosite").headers["Location"]
 
 
 def test_deactivated_operator_session_revoked(app):
     make_operator(app, "temp", "operator", ["orders"])
     c = app.test_client()
     login(c, "temp", "Operator-Pass-77")
-    assert c.get("/paneli/porosite").status_code == 200
+    assert c.get("/paneli-test/porosite").status_code == 200
     owner = app.test_client()
     login(owner)
     with app.app_context():
         oid = _db().execute("SELECT id FROM operators WHERE username='temp'").fetchone()[0]
-    owner.post("/paneli/operatoret/%d/aktiv" % oid, data={"csrf_token": csrf(owner, "/paneli/operatoret")})
-    assert c.get("/paneli/porosite").status_code == 302
+    owner.post("/paneli-test/operatoret/%d/aktiv" % oid, data={"csrf_token": csrf(owner, "/paneli-test/operatoret")})
+    assert c.get("/paneli-test/porosite").status_code == 302
 
 
 def test_product_crud_with_image_upload(client, app):
     login(client)
-    tok = csrf(client, "/paneli/produktet/re")
+    tok = csrf(client, "/paneli-test/produktet/re")
     with app.app_context():
         cid = _db().execute("SELECT id FROM categories WHERE slug='bulmet'").fetchone()[0]
     buf = io.BytesIO()
     Image.new("RGB", (900, 900), (240, 200, 10)).save(buf, "PNG")
     buf.seek(0)
-    r = client.post("/paneli/produktet/re", data={"csrf_token": tok, "name_sq": "Kos dele", "sku": "BU-9001", "price": "2.100", "discount_pct": "10",
+    r = client.post("/paneli-test/produktet/re", data={"csrf_token": tok, "name_sq": "Kos dele", "sku": "BU-9001", "price": "2.100", "discount_pct": "10",
                                                   "stock": "12", "low_threshold": "5", "visible": "1", "category_id": str(cid),
                                                   "photos": (buf, "kos.png")}, content_type="multipart/form-data")
     assert r.status_code == 302, r.text[:500]
@@ -137,23 +137,23 @@ def test_product_crud_with_image_upload(client, app):
 
 def test_upload_rejects_non_images_and_svg(client, app):
     login(client)
-    tok = csrf(client, "/paneli/produktet/re")
+    tok = csrf(client, "/paneli-test/produktet/re")
     with app.app_context():
         cid = _db().execute("SELECT id FROM categories WHERE slug='bulmet'").fetchone()[0]
     data = {"csrf_token": tok, "name_sq": "Test", "sku": "T-1", "price": "100", "category_id": str(cid),
             "photos": (io.BytesIO(b"<svg onload=alert(1)></svg>"), "x.png")}
-    r = client.post("/paneli/produktet/re", data=data, content_type="multipart/form-data")
+    r = client.post("/paneli-test/produktet/re", data=data, content_type="multipart/form-data")
     assert r.status_code == 422 and "foto e vlefshme" in r.text
-    tok = csrf(client, "/paneli/cilesimet")
-    r = client.post("/paneli/cilesimet", data={"csrf_token": tok, "logo_dark": (io.BytesIO(b"<svg/>"), "logo.svg")}, content_type="multipart/form-data")
+    tok = csrf(client, "/paneli-test/cilesimet")
+    r = client.post("/paneli-test/cilesimet", data={"csrf_token": tok, "logo_dark": (io.BytesIO(b"<svg/>"), "logo.svg")}, content_type="multipart/form-data")
     assert r.status_code == 200 and "SVG nuk pranohet" in r.text
     assert client.get("/media/../instance/secret_key").status_code == 404
 
 
 def test_product_validation(client, app):
     login(client)
-    tok = csrf(client, "/paneli/produktet/re")
-    r = client.post("/paneli/produktet/re", data={"csrf_token": tok, "name_sq": "", "sku": "FR-1050", "price": "abc", "discount_pct": "33"})
+    tok = csrf(client, "/paneli-test/produktet/re")
+    r = client.post("/paneli-test/produktet/re", data={"csrf_token": tok, "name_sq": "", "sku": "FR-1050", "price": "abc", "discount_pct": "33"})
     assert r.status_code == 422
     for msg in ("Shkruani emrin", "SKU ekziston", "Çmimi", "Zgjidhni kategorinë"):
         assert msg in r.text
@@ -161,8 +161,8 @@ def test_product_validation(client, app):
 
 def test_bulk_discount_and_audit(client, app):
     login(client)
-    tok = csrf(client, "/paneli/produktet")
-    client.post("/paneli/produktet/bulk", data={"csrf_token": tok, "action": "discount", "pct": "30", "ids": ["3011", "3002"]})
+    tok = csrf(client, "/paneli-test/produktet")
+    client.post("/paneli-test/produktet/bulk", data={"csrf_token": tok, "action": "discount", "pct": "30", "ids": ["3011", "3002"]})
     with app.app_context():
         r = _db().execute("SELECT discount_pct, sale_price FROM products WHERE id=3011").fetchone()
         assert r["discount_pct"] == 30 and r["sale_price"] == 315
@@ -173,23 +173,23 @@ def test_delete_all_requires_typed_confirmation_and_owner(client, app):
     make_operator(app, "prod", "manager", ["products"])
     c = app.test_client()
     login(c, "prod", "Operator-Pass-77")
-    assert c.post("/paneli/produktet/fshi-te-gjitha", data={"csrf_token": csrf(c, "/paneli/produktet"), "confirm": "FSHI TË GJITHA"}).status_code == 403
+    assert c.post("/paneli-test/produktet/fshi-te-gjitha", data={"csrf_token": csrf(c, "/paneli-test/produktet"), "confirm": "FSHI TË GJITHA"}).status_code == 403
     login(client)
-    tok = csrf(client, "/paneli/produktet")
-    client.post("/paneli/produktet/fshi-te-gjitha", data={"csrf_token": tok, "confirm": "fshi"})
+    tok = csrf(client, "/paneli-test/produktet")
+    client.post("/paneli-test/produktet/fshi-te-gjitha", data={"csrf_token": tok, "confirm": "fshi"})
     with app.app_context():
         assert _db().execute("SELECT COUNT(*) FROM products").fetchone()[0] == 9
-    client.post("/paneli/produktet/fshi-te-gjitha", data={"csrf_token": tok, "confirm": "FSHI TË GJITHA"})
+    client.post("/paneli-test/produktet/fshi-te-gjitha", data={"csrf_token": tok, "confirm": "FSHI TË GJITHA"})
     with app.app_context():
         assert _db().execute("SELECT COUNT(*) FROM products").fetchone()[0] == 0
 
 
 def _import(client, content, auto="1", name="p.csv", backorder=None):
-    tok = csrf(client, "/paneli/produktet/importi")
+    tok = csrf(client, "/paneli-test/produktet/importi")
     data = {"csrf_token": tok, "auto_categories": auto, "file": (io.BytesIO(content), name)}
     if backorder:
         data["backorder"] = "1"
-    r = client.post("/paneli/produktet/importi", data=data, content_type="multipart/form-data")
+    r = client.post("/paneli-test/produktet/importi", data=data, content_type="multipart/form-data")
     return r
 
 
@@ -209,7 +209,7 @@ def _run_import(client, r):
     assert r.status_code == 302, r.text[:500]
     jid = int(r.headers["Location"].rstrip("/").split("/")[-1])
     prev = client.get(r.headers["Location"]).text
-    client.post("/paneli/produktet/importi/%d/nis" % jid, data={"csrf_token": csrf(client, r.headers["Location"])})
+    client.post("/paneli-test/produktet/importi/%d/nis" % jid, data={"csrf_token": csrf(client, r.headers["Location"])})
     return jid, prev
 
 
@@ -226,7 +226,7 @@ def test_csv_import_bom_semicolon_update_and_errors(client, app):
     jid = int(r.headers["Location"].rstrip("/").split("/")[-1])
     prev = client.get(r.headers["Location"]).text
     assert "Mungon SKU" in prev and "nuk është numër" in prev and "nuk shkarkohet" in prev
-    client.post("/paneli/produktet/importi/%d/nis" % jid, data={"csrf_token": csrf(client, r.headers["Location"])})
+    client.post("/paneli-test/produktet/importi/%d/nis" % jid, data={"csrf_token": csrf(client, r.headers["Location"])})
     with app.app_context():
         con = _db()
         job = con.execute("SELECT * FROM import_jobs WHERE id=?", (jid,)).fetchone()
@@ -235,7 +235,7 @@ def test_csv_import_bom_semicolon_update_and_errors(client, app):
         assert con.execute("SELECT stock FROM products WHERE sku='PS-8020'").fetchone()[0] == 0  # empty → 0 (warning)
         assert con.execute("SELECT 1 FROM categories WHERE name_sq='Kategori e Re'").fetchone()
         assert not con.execute("SELECT 1 FROM product_images i JOIN products p ON p.id=i.product_id WHERE p.sku='UB-5044'").fetchone()
-    err = client.get("/paneli/produktet/importi/%d/gabimet.csv" % jid)
+    err = client.get("/paneli-test/produktet/importi/%d/gabimet.csv" % jid)
     assert err.status_code == 200 and "Mungon SKU" in err.data.decode("utf-8-sig")
 
 
@@ -256,7 +256,7 @@ def test_csv_export_formula_injection_guard(client, app):
     with app.app_context():
         _db().execute("UPDATE products SET name_sq='=HYPERLINK(\"x\")' WHERE id=3002")
     login(client)
-    data = client.get("/paneli/produktet?eksporto=csv").data.decode("utf-8-sig")
+    data = client.get("/paneli-test/produktet?eksporto=csv").data.decode("utf-8-sig")
     assert "'=HYPERLINK" in data
 
 
@@ -267,7 +267,7 @@ def test_invoice_search_variants(client, app):
     login(client)
     for q, expect in (("EA-2026-00006", "EA-2026-00006"), ("6", None), ("muca", "EA-2026-00003"), ("+355684551290", "EA-2026-00005"),
                       ("m.daci@outlook.com", "EA-2026-00004"), ("VLORE10", "EA-2026-00006"), ("Hoxha Elira", "EA-2026-00006")):
-        html = client.get("/paneli/faturat?q=" + q.replace("+", "%2B")).text
+        html = client.get("/paneli-test/faturat?q=" + q.replace("+", "%2B")).text
         if expect:
             first = re.search(r'class="ea-invlist__item"[^>]*>.*?<b class="ea-num">([^<]+)</b>', html, re.S)
             assert first and first.group(1) == expect, (q, first and first.group(1))
@@ -278,8 +278,8 @@ def test_order_status_flow_audited(client, app):
         from enesai.services.demo_orders import seed_orders
         seed_orders(_db())
     login(client)
-    tok = csrf(client, "/paneli/porosite")
-    r = client.post("/paneli/porosite/EA-2026-00006/statusi", data={"csrf_token": tok, "status": "cancel"}, headers={"X-Requested-With": "fetch"})
+    tok = csrf(client, "/paneli-test/porosite")
+    r = client.post("/paneli-test/porosite/EA-2026-00006/statusi", data={"csrf_token": tok, "status": "cancel"}, headers={"X-Requested-With": "fetch"})
     assert r.get_json()["ok"] and "kuponi u rikthye" in r.get_json()["message"]
     with app.app_context():
         assert _db().execute("SELECT status FROM coupons WHERE code='VLORE10'").fetchone()[0] == "active"
@@ -301,13 +301,13 @@ def test_audit_log_is_append_only(app):
 
 def test_settings_validation_and_save(client, app):
     login(client)
-    tok = csrf(client, "/paneli/cilesimet")
-    r = client.post("/paneli/cilesimet", data={"csrf_token": tok, "nipt": "123", "whatsapp": "abc", "fee": "x", "store_lat": "200"})
+    tok = csrf(client, "/paneli-test/cilesimet")
+    r = client.post("/paneli-test/cilesimet", data={"csrf_token": tok, "nipt": "123", "whatsapp": "abc", "fee": "x", "store_lat": "200"})
     assert r.status_code == 200 and "NIPT" in r.text and "Asgjë nuk u ruajt" in r.text
-    r = client.post("/paneli/cilesimet", data={"csrf_token": tok, "nipt": "l01234567a", "whatsapp": "+355 69 000 1111", "fee": "250", "freeOver": "4.000",
+    r = client.post("/paneli-test/cilesimet", data={"csrf_token": tok, "nipt": "l01234567a", "whatsapp": "+355 69 000 1111", "fee": "250", "freeOver": "4.000",
                                                "legalName": "Test shpk", "waMode": "api"})
     assert "Business API" in r.text  # API mode refused without credentials
-    r = client.post("/paneli/cilesimet", data={"csrf_token": tok, "nipt": "l01234567a", "whatsapp": "+355 69 000 1111", "fee": "250", "freeOver": "4.000",
+    r = client.post("/paneli-test/cilesimet", data={"csrf_token": tok, "nipt": "l01234567a", "whatsapp": "+355 69 000 1111", "fee": "250", "freeOver": "4.000",
                                                "legalName": "Test shpk", "waMode": "manual", "address": "Rruga Test"})
     assert r.status_code == 302
     with app.app_context():
@@ -319,16 +319,16 @@ def test_settings_validation_and_save(client, app):
 
 def test_sample_invoice_and_reports_csv(client):
     login(client)
-    assert client.get("/paneli/cilesimet/fature-shembull.pdf").data[:4] == b"%PDF"
-    r = client.get("/paneli/raportet?eksporto=csv")
+    assert client.get("/paneli-test/cilesimet/fature-shembull.pdf").data[:4] == b"%PDF"
+    r = client.get("/paneli-test/raportet?eksporto=csv")
     assert r.status_code == 200 and r.data.decode("utf-8-sig").startswith("Data;Porosi")
 
 
 def test_admin_pages_render(client):
     login(client)
-    for p in ("/paneli/", "/paneli/operatoret", "/paneli/produktet", "/paneli/produktet/1050", "/paneli/kategorite", "/paneli/produktet/importi",
-              "/paneli/porosite", "/paneli/faturat", "/paneli/kuponat", "/paneli/abonentet", "/paneli/email", "/paneli/reklamat", "/paneli/raportet",
-              "/paneli/regjistri", "/paneli/cilesimet"):
+    for p in ("/paneli-test/", "/paneli-test/operatoret", "/paneli-test/produktet", "/paneli-test/produktet/1050", "/paneli-test/kategorite", "/paneli-test/produktet/importi",
+              "/paneli-test/porosite", "/paneli-test/faturat", "/paneli-test/kuponat", "/paneli-test/abonentet", "/paneli-test/email", "/paneli-test/reklamat", "/paneli-test/raportet",
+              "/paneli-test/regjistri", "/paneli-test/cilesimet"):
         assert client.get(p).status_code == 200, p
 
 
@@ -340,18 +340,19 @@ def test_reset_password_clears_lockout_and_sessions(client, app):
     with app.app_context():
         from enesai.db import get_db
         from enesai.services.auth import reset_password
-        assert reset_password("nuk-ekziston", "Fjalekalim-i-Ri-2026") == "Nuk ekziston përdorues me këtë emër."
+        assert reset_password("nuk-ekziston", "Kafe-Mengjes-7741") == "Nuk ekziston përdorues me këtë emër."
         assert reset_password("pronari", "Shkurt-1")  # too short → error text
-        assert reset_password("PRONARI", "Fjalekalim-i-Ri-2026") is None
+        assert reset_password("PRONARI", "Kafe-Mengjes-7741") is None
         assert get_db().execute("SELECT COUNT(*) FROM login_attempts WHERE username='pronari'").fetchone()[0] == 0
         assert get_db().execute("SELECT COUNT(*) FROM audit_log WHERE action LIKE 'Rivendosi%'").fetchone()[0] == 1
     assert login(client, password=OWNER_PW).status_code == 401
-    assert login(client, password="Fjalekalim-i-Ri-2026").status_code == 302
+    assert login(client, password="Kafe-Mengjes-7741").status_code == 302
 
 
 def test_login_page_explains_missing_owner(tmp_path, monkeypatch):
     monkeypatch.setenv("ENESAI_INSTANCE", str(tmp_path / "bosh"))
     monkeypatch.setenv("SECRET_KEY", "test-secret-key-not-for-production")
+    monkeypatch.setenv("ADMIN_PATH", "paneli-test")
     from enesai import create_app
     c = create_app(TESTING=True).test_client()
     r = login(c, username="admin", password="cfaredo-1234")
@@ -388,8 +389,8 @@ def test_xlsx_market_export_then_prices_and_categories(client, app):
         pid = _db().execute("SELECT id FROM products WHERE sku='8000500385081'").fetchone()[0]
     assert client.get("/produkt/%d" % pid).status_code == 404
     # cannot be switched on without a price
-    tok = csrf(client, "/paneli/produktet")
-    r = client.post("/paneli/produktet/%d/dukshem" % pid, data={"csrf_token": tok}, headers={"X-Requested-With": "fetch"})
+    tok = csrf(client, "/paneli-test/produktet")
+    r = client.post("/paneli-test/produktet/%d/dukshem" % pid, data={"csrf_token": tok}, headers={"X-Requested-With": "fetch"})
     assert r.status_code == 409 and "çmim" in r.get_json()["message"]
     # later file with prices (+ a category for one) — names absent: existing codes still update
     data2 = _xlsx([["Kodi", "Çmimi", "Kategoria"],
@@ -408,8 +409,8 @@ def test_xlsx_market_export_then_prices_and_categories(client, app):
     # bulk category for every product of a search filter completes the rest
     with app.app_context():
         cid = _db().execute("SELECT id FROM categories WHERE slug='bulmet'").fetchone()[0]
-    tok = csrf(client, "/paneli/produktet?stoku=nocat")
-    r = client.post("/paneli/produktet/bulk", data={"csrf_token": tok, "action": "category", "category_id": cid, "scope": "filter",
+    tok = csrf(client, "/paneli-test/produktet?stoku=nocat")
+    r = client.post("/paneli-test/produktet/bulk", data={"csrf_token": tok, "action": "category", "category_id": cid, "scope": "filter",
                                                     "f_q": "gjiz", "f_stoku": "nocat"})
     assert r.status_code == 302
     with app.app_context():
@@ -423,8 +424,8 @@ def test_bulk_show_skips_products_without_price(client, app):
     _run_import(client, _import(client, _xlsx([["Kodi", "Përshkrimi"], ["P-1", "PA CMIM"]]), name="a.xlsx"))
     with app.app_context():
         pid = _db().execute("SELECT id FROM products WHERE sku='P-1'").fetchone()[0]
-    tok = csrf(client, "/paneli/produktet")
-    r = client.post("/paneli/produktet/bulk", data={"csrf_token": tok, "action": "show", "ids": [pid, 3002]}, follow_redirects=True)
+    tok = csrf(client, "/paneli-test/produktet")
+    r = client.post("/paneli-test/produktet/bulk", data={"csrf_token": tok, "action": "show", "ids": [pid, 3002]}, follow_redirects=True)
     assert "1 nuk u shfaqën" in r.text
     with app.app_context():
         assert _db().execute("SELECT visible FROM products WHERE id=?", (pid,)).fetchone()[0] == 0
@@ -442,9 +443,9 @@ def test_xlsx_backorder_option_and_old_xls_refused(client, app):
 
 def test_product_form_allows_hidden_without_price(client, app):
     login(client)
-    tok = csrf(client, "/paneli/produktet/re")
+    tok = csrf(client, "/paneli-test/produktet/re")
     base = {"csrf_token": tok, "sku": "F-1", "name_sq": "Produkt pa cmim", "price": "", "category_id": "", "stock": "0", "low_threshold": "5", "discount_pct": "0"}
-    r = client.post("/paneli/produktet/re", data=base)
+    r = client.post("/paneli-test/produktet/re", data=base)
     assert r.status_code == 302
-    r = client.post("/paneli/produktet/re", data=dict(base, sku="F-2", visible="1"))
+    r = client.post("/paneli-test/produktet/re", data=dict(base, sku="F-2", visible="1"))
     assert r.status_code == 422 and "duhet të ketë çmim" in r.text

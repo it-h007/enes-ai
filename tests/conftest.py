@@ -17,8 +17,9 @@ OWNER_PW = "Test-Pasw0rd-2026!"
 def app(tmp_path, monkeypatch):
     monkeypatch.setenv("ENESAI_INSTANCE", str(tmp_path / "inst"))
     monkeypatch.setenv("SECRET_KEY", "test-secret-key-not-for-production")
+    monkeypatch.setenv("ADMIN_PATH", "paneli-test")  # fixed path for the tests; production uses a random one
     monkeypatch.delenv("WA_TOKEN", raising=False)
-    app = create_app(TESTING=True)
+    app = create_app(TESTING=True, CHECKOUT_MIN_SECONDS=0)
     with app.app_context():
         import seed
         seed.seed(get_db())
@@ -40,8 +41,8 @@ def csrf(client, path="/"):
 
 
 def login(client, username="pronari", password=OWNER_PW):
-    tok = csrf(client, "/paneli/login")
-    return client.post("/paneli/login", data={"csrf_token": tok, "username": username, "password": password})
+    tok = csrf(client, "/paneli-test/login")
+    return client.post("/paneli-test/login", data={"csrf_token": tok, "username": username, "password": password})
 
 
 def make_operator(app, username, role="operator", perms=(), password="Operator-Pass-77"):

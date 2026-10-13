@@ -95,3 +95,14 @@ limiter = RateLimiter()
 def rate_limit(name, limit, window):
     if not limiter.hit(name + ":" + client_ip(), limit, window):
         abort(429)
+
+
+# ---------------- bot traps (no CAPTCHA, no third parties) ----------------
+
+def honeypot_tripped(data):
+    """The hidden “website” field is never seen by people; scripts that fill every field do fill it."""
+    return bool((data.get("website") or "").strip())
+
+
+def bot_log(what):
+    current_app.logger.warning("bot trap: %s from %s", what, client_ip())
