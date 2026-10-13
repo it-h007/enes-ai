@@ -84,15 +84,25 @@ def migrate(con):
         if ver in done:
             continue
         sql = f.read_text(encoding="utf-8")
+        # Table rebuilds must run with foreign keys off (a DROP TABLE would otherwise fire
+        # ON DELETE actions on child rows); integrity is re-checked before COMMIT.
+        fk_off = "-- pragma: foreign_keys=off" in sql.split("\n", 1)[0]
+        if fk_off:
+            con.execute("PRAGMA foreign_keys = OFF")
         con.execute("BEGIN IMMEDIATE")
         try:
             for stmt in _split_sql(sql):
                 con.execute(stmt)
+            if fk_off and con.execute("PRAGMA foreign_key_check").fetchone():
+                raise sqlite3.IntegrityError("foreign key check failed after migration %s" % ver)
             con.execute("INSERT INTO schema_migrations(version) VALUES (?)", (ver,))
             con.execute("COMMIT")
         except Exception:
             con.execute("ROLLBACK")
             raise
+        finally:
+            if fk_off:
+                con.execute("PRAGMA foreign_keys = ON")
         applied.append(ver)
     _ensure_fts(con)
     return applied

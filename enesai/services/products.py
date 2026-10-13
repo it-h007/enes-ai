@@ -7,6 +7,9 @@ from . import audit
 from .catalog import DISCOUNTS, build_search_text
 
 SKU_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._\-/]{0,39}$")
+UNITS = ("copë", "kg", "L", "m", "pako")
+# A product may be stored without price or category, but then only hidden (DB CHECK, migration 0003).
+COMPLETE_SQL = "(price > 0 AND category_id IS NOT NULL)"
 
 
 def parse_int(v, default=None):
@@ -27,7 +30,7 @@ def validate(f, pid=None, con=None):
     d["desc_en"] = (f.get("desc_en") or "").strip()[:4000]
     d["brand"] = (f.get("brand") or "").strip()[:80]
     d["packaging"] = (f.get("packaging") or "").strip()[:60]
-    d["unit"] = f.get("unit") if f.get("unit") in ("copë", "kg", "L", "pako") else "copë"
+    d["unit"] = f.get("unit") if f.get("unit") in UNITS else "copë"
     d["barcode"] = re.sub(r"\s", "", f.get("barcode") or "")[:20]
     d["sku"] = (f.get("sku") or "").strip()[:40]
     if len(d["name_sq"]) < 2:
@@ -38,13 +41,15 @@ def validate(f, pid=None, con=None):
         err["sku"] = "Ky SKU ekziston te një produkt tjetër."
     if d["barcode"] and not d["barcode"].isdigit():
         err["barcode"] = "Barkodi ka vetëm shifra."
+    d["visible"] = 1 if f.get("visible") == "1" else 0
     try:
-        d["price"] = parse_int(f.get("price"))
-        if not d["price"] or d["price"] <= 0 or d["price"] > 10_000_000:
+        d["price"] = parse_int(f.get("price"), 0)
+        if d["price"] < 0 or d["price"] > 10_000_000 or (d["price"] == 0 and d["visible"]):
             raise ValueError
     except (ValueError, TypeError):
-        err["price"] = "Çmimi: numër i plotë në lek, p.sh. 2370."
-        d["price"] = None
+        err["price"] = ("Çmimi: numër i plotë në lek, p.sh. 2370." if (f.get("price") or "").strip()
+                        else "Produkti i dukshëm duhet të ketë çmim. Ose lëreni të fshehur derisa të keni çmimin.")
+        d["price"] = 0
     try:
         d["discount_pct"] = parse_int(f.get("discount_pct"), 0)
         if d["discount_pct"] not in DISCOUNTS:
@@ -60,7 +65,6 @@ def validate(f, pid=None, con=None):
         except ValueError:
             err[k] = "%s: numër i plotë ≥ 0." % lbl
             d[k] = 0
-    d["visible"] = 1 if f.get("visible") == "1" else 0
     d["on_offers"] = 1 if f.get("on_offers") == "1" else 0
     d["allow_backorder"] = 1 if f.get("allow_backorder") == "1" else 0
     try:
@@ -69,7 +73,9 @@ def validate(f, pid=None, con=None):
         d["category_id"] = 0
     cat = con.execute("SELECT * FROM categories WHERE id = ? AND parent_id IS NULL", (d["category_id"],)).fetchone()
     if not cat:
-        err["category_id"] = "Zgjidhni kategorinë."
+        d["category_id"] = None
+        if d["visible"] or f.get("category_id"):
+            err["category_id"] = "Zgjidhni kategorinë (e detyrueshme për produktet e dukshme)."
     try:
         sub = int(f.get("subcategory_id") or 0)
     except ValueError:
@@ -84,14 +90,15 @@ def validate(f, pid=None, con=None):
 
 
 def _derived(d, con):
-    names = [r[0] for r in con.execute("SELECT name_sq FROM categories WHERE id IN (?, ?)", (d["category_id"], d.get("subcategory_id") or 0))]
+    names = [r[0] for r in con.execute("SELECT name_sq FROM categories WHERE id IN (?, ?)", (d.get("category_id") or 0, d.get("subcategory_id") or 0))]
+    d.setdefault("auto_hidden", 0)
     d["sale_price"] = discounted(d["price"], d["discount_pct"])
     d["search_text"] = build_search_text(d["name_sq"], d["name_en"], d["brand"], d["sku"], d["packaging"], names)
     return d
 
 
 COLS = ["sku", "name_sq", "name_en", "desc_sq", "desc_en", "brand", "packaging", "unit", "barcode", "price", "discount_pct", "sale_price",
-        "stock", "low_threshold", "allow_backorder", "visible", "on_offers", "category_id", "subcategory_id", "search_text"]
+        "stock", "low_threshold", "allow_backorder", "visible", "auto_hidden", "on_offers", "category_id", "subcategory_id", "search_text"]
 
 
 def insert(d, con=None):

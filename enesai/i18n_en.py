@@ -371,6 +371,8 @@ EN = {
     "Shporta juaj është bosh.": "Your cart is empty.",
     "Shporta u pastrua.": "The cart was emptied.",
     "Shporta, %(n)s produkte": "Cart, %(n)s products",
+    "Të gjitha kategoritë": "All categories",
+    "Familje me karrocë plot me ushqime para dyqanit ENES’AI Super Market": "A family with a full shopping cart in front of the ENES’AI Super Market store",
     "Shportë me fruta e perime të freskëta mbi banak druri në një market me dritë të ngrohtë": "A basket of fresh fruit and vegetables on a wooden counter in a warmly lit market",
     "Shto": "Increase",
     "Shto %(n)s te të preferuarat": "Add %(n)s to favourites",

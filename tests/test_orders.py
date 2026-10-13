@@ -234,3 +234,19 @@ def test_seller_snapshot_is_immutable(client, app):
         from enesai.services import settings as st
         st.save({"legalName": "Emër i Ri"})
     assert "Subjekti i Vjetër shpk" in client.get(r.headers["Location"]).text
+
+
+def test_location_outside_vlore_rejected(client):
+    from conftest import add_to_cart, checkout
+    add_to_cart(client)
+    r, _i, _t = checkout(client, lat="0.001842", lng="-0.002780")
+    assert r.status_code == 422 and "jashtë zonës së dërgesës" in r.text
+    r, _i, _t = checkout(client, lat="41.3275", lng="19.8187")  # Tirana, ~100 km
+    assert r.status_code == 422
+
+
+def test_checkout_map_starts_in_vlore(client):
+    from conftest import add_to_cart
+    add_to_cart(client)
+    html = client.get("/arka").text
+    assert 'data-lat="40.466" data-lng="19.4914"' in html

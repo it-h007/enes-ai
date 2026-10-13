@@ -71,6 +71,7 @@ class Config:
         self.MAX_QTY_PER_LINE = _int("MAX_QTY_PER_LINE", 20)
         self.COUPON_MAX_PCT = _int("COUPON_MAX_PCT", 90)
         self.ORDER_LINK_DAYS = _int("ORDER_LINK_DAYS", 30)
+        self.MAX_DELIVERY_KM = _int("MAX_DELIVERY_KM", 60)
         self.ADULT_CHECKOUT_ENABLED = _bool("ADULT_CHECKOUT_ENABLED", False)
         self.MAP_TILE_URL = os.environ.get("MAP_TILE_URL", "https://tile.openstreetmap.org/{z}/{x}/{y}.png")
         self.MAP_TILE_ATTRIBUTION = os.environ.get("MAP_TILE_ATTRIBUTION", "© OpenStreetMap")

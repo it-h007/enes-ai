@@ -55,6 +55,9 @@ def validate(form):
     loc = parse_location(form)
     if not loc:
         err["co-loc"] = "Zgjidhni pikën: GPS ose në hartë"
+    elif not within_delivery_area(loc["lat"], loc["lng"]):
+        err["co-loc"] = "Pika është jashtë zonës së dërgesës (Vlorë). Kontrolloni pikën në hartë"
+        loc = None
     if len(v["address"]) < 6:
         err["co-addr"] = "Shkruani të paktën rrugën dhe pallatin / shtëpinë."
     if not v["terms"]:
@@ -87,6 +90,28 @@ def parse_location(form):
         except ValueError:
             acc = None
     return {"lat": round(lat, 6), "lng": round(lng, 6), "src": src, "acc": acc}
+
+
+VLORE = (40.4660, 19.4914)
+
+
+def store_center():
+    s = st.all_settings()
+    try:
+        return (float(s["store_lat"]), float(s["store_lng"])) if s.get("store_lat") and s.get("store_lng") else VLORE
+    except ValueError:
+        return VLORE
+
+
+def within_delivery_area(lat, lng):
+    """Sanity bound: the point must be within MAX_DELIVERY_KM of the store (default 60 km),
+    which rejects obviously wrong points (0,0, another country) without guessing zones."""
+    import math
+    clat, clng = store_center()
+    dlat, dlng = math.radians(lat - clat), math.radians(lng - clng)
+    a = math.sin(dlat / 2) ** 2 + math.cos(math.radians(clat)) * math.cos(math.radians(lat)) * math.sin(dlng / 2) ** 2
+    km = 6371 * 2 * math.asin(math.sqrt(a))
+    return km <= current_app.config.get("MAX_DELIVERY_KM", 60)
 
 
 # ---------------- tokens for the confirmation page / PDF (C-28) ----------------

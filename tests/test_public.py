@@ -20,10 +20,13 @@ def test_neox_credit_is_last_visible_element(client):
     assert footer < credit and "NEOX Web Studio" in html[credit:credit + 600]
 
 
-def test_home_has_no_add_to_cart_and_14_categories(client):
+def test_home_has_no_add_to_cart_and_20_categories(client):
     html = client.get("/").text
     assert 'data-ea="add"' not in html.split('<main id="main">')[1].split("</main>")[0]
-    assert html.count('class="ea-catcard"') == 14
+    assert html.count('class="ea-catcard"') == 20
+    for name in ("Kancelari", "Lodra", "Produkte Festive", "Enë Kuzhine", "Veshmbathje", "Tekstil"):
+        assert name in html
+    assert "ea-catcard--fill7" in html  # 7th slot of the last desktop row
     assert 'href="/oferta"' in html  # CR-08 working offers link
 
 
@@ -167,3 +170,13 @@ def test_e164_normalisation_keeps_country_code():
     assert e164_digits("+355 69 123 4567") == "355691234567"
     assert e164_digits("00355691234567") == "355691234567"
     assert e164_digits("+44 775 156 4698") == "447751564698"
+
+
+def test_main_categories_are_real_not_demo(app):
+    with app.app_context():
+        import seed
+        from enesai.db import get_db
+        con = get_db()
+        seed.purge(con)
+        assert con.execute("SELECT COUNT(*) FROM categories WHERE parent_id IS NULL").fetchone()[0] == 20
+        assert con.execute("SELECT COUNT(*) FROM categories WHERE is_demo = 1").fetchone()[0] == 0

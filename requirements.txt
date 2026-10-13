@@ -8,5 +8,7 @@ click==8.5.0
 blinker==1.9.0
 reportlab==5.0.1
 pillow==12.3.0
+openpyxl==3.1.5
+et-xmlfile==2.0.0
 waitress==3.0.2
 tzdata>=2024.1 ; sys_platform == "win32"

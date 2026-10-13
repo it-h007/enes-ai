@@ -18,3 +18,18 @@ a.ea-rail__item:focus-visible, a.ea-chip:focus-visible, a.ea-invlist__item:focus
 @media (prefers-reduced-motion: reduce) {
   .ea-wablock, .ea-btn--whatsapp, .ea-reveal, .ea-confirm__mark * { animation: none !important; }
 }
+
+/* Hero photo = storefront with the ENES’AI sign at the top (client photo, Oct 2026):
+   anchor the crop to the top so the sign is never cut, and on phones move the round
+   badge to the dark wall on the left so it does not cover “AI”. */
+.ea-hero__media img { object-position: 50% 12%; }
+@container site (max-width: 599px) {
+  .ea-hero__media img { object-position: 50% 20%; }
+  .ea-hero__badge { right: auto; left: 8px; top: 8px; width: 74px; height: 74px; font-size: 8px; padding: 5px; }
+}
+
+/* 20 main categories (Oct 2026): at 7 per row the last row has 6 cards, so a
+   “Të gjitha kategoritë” tile (design class .ea-catcard--more) fills the 7th slot.
+   Only shown where the grid has 7 columns; 5 and 4 columns and the phone swipe divide 20 evenly. */
+.ea-catcard--fill7 { display: none; }
+@container site (min-width: 1180px) { .ea-catgrid > .ea-catcard--fill7 { display: flex; } }

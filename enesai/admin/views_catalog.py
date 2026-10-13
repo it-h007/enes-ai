@@ -7,7 +7,7 @@ from flask import Response, abort, current_app, flash, g, jsonify, redirect, ren
 from ..db import get_db, transaction
 from ..services import audit, auth, csv_import, images
 from ..services import products as psvc
-from ..services.catalog import DISCOUNTS, categories, list_products, media_url, product_view
+from ..services.catalog import DISCOUNTS, categories, filter_ids, list_products, media_url, product_view
 from ..util import discounted, now_iso
 from . import bp
 from .views_core import _csv, page
@@ -19,7 +19,7 @@ PER_PAGE_OPTS = (25, 50, 100)
 
 def _filters():
     a = request.args
-    f = {"q": (a.get("q") or "").strip()[:80], "cat": a.get("kategoria", type=int), "stock_state": a.get("stoku") if a.get("stoku") in ("in", "low", "out", "hidden") else None,
+    f = {"q": (a.get("q") or "").strip()[:80], "cat": a.get("kategoria", type=int), "stock_state": a.get("stoku") if a.get("stoku") in ("in", "low", "out", "hidden", "nocat", "noprice") else None,
          "sale": a.get("oferta") == "1", "per": a.get("per", 25, type=int), "page": a.get("faqe", 1, type=int), "sort": a.get("rendit") or "te-rejat"}
     if f["per"] not in PER_PAGE_OPTS:
         f["per"] = 25
@@ -38,7 +38,7 @@ def products():
     res = list_products(q, public=False, per_page=f["per"])
     con = get_db()
     raw = {r["id"]: r for r in con.execute("SELECT id, visible, updated_at, is_demo FROM products WHERE id IN (%s)" % (",".join(str(p["id"]) for p in res["items"]) or "0"))}
-    counts = con.execute("SELECT COUNT(*), SUM(visible), SUM(discount_pct>0) FROM products").fetchone()
+    counts = con.execute("SELECT COUNT(*), SUM(visible), SUM(discount_pct>0), SUM(price=0), SUM(category_id IS NULL) FROM products").fetchone()
 
     def page_url(n):
         a = request.args.to_dict(); a["faqe"] = n
@@ -48,10 +48,24 @@ def products():
 
 
 def _ids():
+    """Selected rows, or — with scope=filter — every product matching the list filter the
+    operator was looking at (e.g. search “AKULLORE” → category for all of them at once)."""
+    if request.form.get("scope") == "filter":
+        a = request.form
+        q = {"q": (a.get("f_q") or "").strip()[:80], "sale": a.get("f_oferta") == "1",
+             "stock_state": a.get("f_stoku") if a.get("f_stoku") in ("in", "low", "out", "hidden", "nocat", "noprice") else None}
+        cat = a.get("f_kategoria", type=int)
+        if cat:
+            q["cats"] = [cat]
+        return filter_ids(q)
     try:
         return [int(x) for x in request.form.getlist("ids")][:1000]
     except ValueError:
         abort(400)
+
+
+def _in(ids):
+    return ",".join("?" * len(ids))
 
 
 @bp.post("/produktet/bulk")
@@ -69,20 +83,30 @@ def products_bulk():
                 abort(400)
             psvc.set_discount(ids, pct, con)
             msg = "Zbritja −%d%% u vendos te %d produkte." % (pct, len(ids)) if pct else "Zbritja u hoq nga %d produkte." % len(ids)
-        elif action in ("hide", "show"):
-            con.execute("UPDATE products SET visible=?, updated_at=? WHERE id IN (%s)" % ",".join("?" * len(ids)), [0 if action == "hide" else 1, now_iso()] + ids)
-            audit.log("Fshehu produkte" if action == "hide" else "Shfaqi produkte", "%d produkte" % len(ids), area="products", con=con)
-            msg = "%d produkte u %s." % (len(ids), "fshehën" if action == "hide" else "shfaqën")
+        elif action == "hide":
+            con.execute("UPDATE products SET visible=0, auto_hidden=0, updated_at=? WHERE id IN (%s)" % _in(ids), [now_iso()] + ids)
+            audit.log("Fshehu produkte", "%d produkte" % len(ids), area="products", con=con)
+            msg = "%d produkte u fshehën." % len(ids)
+        elif action == "show":
+            # only products with a price and a category can be shown (DB CHECK); the rest are reported
+            n = con.execute("UPDATE products SET visible=1, auto_hidden=0, updated_at=? WHERE id IN (%s) AND %s" % (_in(ids), psvc.COMPLETE_SQL), [now_iso()] + ids).rowcount
+            audit.log("Shfaqi produkte", "%d produkte" % n, area="products", con=con)
+            msg = "%d produkte u shfaqën." % n + (" %d nuk u shfaqën sepse u mungon çmimi ose kategoria." % (len(ids) - n) if n < len(ids) else "")
         elif action == "category":
             cid = request.form.get("category_id", type=int)
             if not con.execute("SELECT 1 FROM categories WHERE id=? AND parent_id IS NULL", (cid,)).fetchone():
                 abort(400)
-            con.execute("UPDATE products SET category_id=?, subcategory_id=NULL, updated_at=? WHERE id IN (%s)" % ",".join("?" * len(ids)), [cid, now_iso()] + ids)
+            for i in range(0, len(ids), 900):
+                chunk = ids[i:i + 900]
+                con.execute("UPDATE products SET category_id=?, subcategory_id=NULL, updated_at=? WHERE id IN (%s)" % _in(chunk), [cid, now_iso()] + chunk)
+                # imported products that were hidden only for missing data go live once complete
+                con.execute("UPDATE products SET visible=1, auto_hidden=0 WHERE auto_hidden=1 AND price > 0 AND id IN (%s)" % _in(chunk), chunk)
             psvc.recompute_search(con, cid)
             audit.log("Ndryshoi kategorinë", "%d produkte" % len(ids), area="products", con=con)
             msg = "Kategoria u ndryshua për %d produkte." % len(ids)
         elif action == "delete":
-            _delete(con, ids)
+            for i in range(0, len(ids), 900):
+                _delete(con, ids[i:i + 900])
             msg = "%d produkte u fshinë. Porositë e vjetra e ruajnë emrin dhe çmimin." % len(ids)
         else:
             abort(400)
@@ -103,9 +127,15 @@ def _delete(con, ids):
 @auth.requires("products")
 def product_visible(pid):
     con = get_db()
-    r = con.execute("SELECT name_sq, sku, visible FROM products WHERE id=?", (pid,)).fetchone() or abort(404)
+    r = con.execute("SELECT name_sq, sku, visible, price, category_id FROM products WHERE id=?", (pid,)).fetchone() or abort(404)
     v = 0 if r["visible"] else 1
-    con.execute("UPDATE products SET visible=?, updated_at=? WHERE id=?", (v, now_iso(), pid))
+    if v and (not r["price"] or not r["category_id"]):
+        msg = "Ky produkt nuk ka %s — plotësojeni para se ta shfaqni." % ("çmim" if not r["price"] else "kategori")
+        if request.headers.get("X-Requested-With") == "fetch":
+            return jsonify(ok=False, visible=0, message=msg), 409
+        flash(msg, "error")
+        return redirect(request.referrer or url_for("admin.products"))
+    con.execute("UPDATE products SET visible=?, auto_hidden=0, updated_at=? WHERE id=?", (v, now_iso(), pid))
     audit.log("Shfaqi produkt" if v else "Fshehu produkt", "%s (%s)" % (r["name_sq"], r["sku"]), area="products", con=con)
     if request.headers.get("X-Requested-With") == "fetch":
         return jsonify(ok=True, visible=v)
@@ -120,7 +150,7 @@ def product_delete(pid):
         abort(404)
     with transaction(con):
         if request.form.get("hide_instead") == "1":
-            con.execute("UPDATE products SET visible=0, updated_at=? WHERE id=?", (now_iso(), pid))
+            con.execute("UPDATE products SET visible=0, auto_hidden=0, updated_at=? WHERE id=?", (now_iso(), pid))
             audit.log("Fshehu produkt", "#%d" % pid, area="products", con=con)
             flash("Produkti u fsheh nga dyqani.", "success")
         else:
@@ -150,7 +180,7 @@ def products_delete_all():
 
 def _export_catalog():
     con = get_db()
-    rows = con.execute("""SELECT p.*, c.name_sq cat, s.name_sq sub FROM products p JOIN categories c ON c.id=p.category_id
+    rows = con.execute("""SELECT p.*, c.name_sq cat, s.name_sq sub FROM products p LEFT JOIN categories c ON c.id=p.category_id
                           LEFT JOIN categories s ON s.id=p.subcategory_id ORDER BY p.id""")
     return _csv("katalogu.csv", csv_import.COLUMNS,
                 [[r["sku"], r["name_sq"], r["name_en"], r["cat"], r["sub"] or "", r["brand"], r["packaging"], r["price"], r["discount_pct"],
@@ -374,7 +404,7 @@ def category_order():
 @bp.get("/produktet/importi")
 @auth.requires("import")
 def import_upload():
-    return page("admin/import.html", "prod", "Importo produkte nga CSV", "Paneli › Produktet › Importi", step="upload", error=None)
+    return page("admin/import.html", "prod", "Importo produkte (Excel ose CSV)", "Paneli › Produktet › Importi", step="upload", error=None)
 
 
 @bp.get("/produktet/importi/shablloni.csv")
@@ -386,20 +416,22 @@ def import_template():
 @bp.post("/produktet/importi")
 @auth.requires("import")
 def import_parse():
+    T = ("admin/import.html", "prod", "Importo produkte (Excel ose CSV)", "Paneli › Produktet › Importi")
     f = request.files.get("file")
     if not f or not f.filename:
-        return page("admin/import.html", "prod", "Importo produkte nga CSV", "Paneli › Produktet › Importi", step="upload", error="Zgjidhni një skedar CSV."), 400
-    if not f.filename.lower().endswith((".csv", ".txt")):
-        return page("admin/import.html", "prod", "Importo produkte nga CSV", "Paneli › Produktet › Importi", step="upload", error="Lejohen vetëm skedarë .csv."), 400
+        return page(*T, step="upload", error="Zgjidhni një skedar Excel (.xlsx) ose CSV."), 400
+    if not f.filename.lower().endswith((".csv", ".txt", ".xlsx", ".xls")):
+        return page(*T, step="upload", error="Lejohen skedarë .xlsx, .csv ose .txt."), 400
     raw = f.read(20 * 1024 * 1024 + 1)
     if len(raw) > 20 * 1024 * 1024:
-        return page("admin/import.html", "prod", "Importo produkte nga CSV", "Paneli › Produktet › Importi", step="upload", error="Skedari kalon 20 MB."), 413
+        return page(*T, step="upload", error="Skedari kalon 20 MB."), 413
     auto = request.form.get("auto_categories") == "1"
+    backorder = request.form.get("backorder") == "1"
     try:
-        rows, _d = csv_import.parse(raw, auto)
+        rows, notes = csv_import.parse(raw, auto, filename=f.filename, backorder=backorder)
     except csv_import.ImportError_ as e:
-        return page("admin/import.html", "prod", "Importo produkte nga CSV", "Paneli › Produktet › Importi", step="upload", error=str(e)), 400
-    jid = csv_import.save_job(f.filename, rows, auto, g.operator)
+        return page(*T, step="upload", error=str(e)), 400
+    jid = csv_import.save_job(f.filename, rows, auto, g.operator, notes=notes, backorder=backorder)
     return redirect(url_for("admin.import_preview", jid=jid))
 
 
@@ -412,16 +444,18 @@ def _job(jid):
 def import_preview(jid):
     job = _job(jid)
     if job["status"] == "running":
-        return page("admin/import.html", "prod", "Importo produkte nga CSV", "Paneli › Produktet › Importi", step="progress", job=job)
+        return page("admin/import.html", "prod", "Importo produkte (Excel ose CSV)", "Paneli › Produktet › Importi", step="progress", job=job)
     if job["status"] in ("done", "failed"):
         rows = csv_import.load_rows(job)
-        return page("admin/import.html", "prod", "Importo produkte nga CSV", "Paneli › Produktet › Importi", step="results", job=job,
+        return page("admin/import.html", "prod", "Importo produkte (Excel ose CSV)", "Paneli › Produktet › Importi", step="results", job=job,
                     errors=[r for r in rows if r["errors"]][:200])
-    rows = csv_import.load_rows(job)
+    payload = csv_import.load_payload(job)
+    rows = payload["rows"]
     s = csv_import.summary(rows)
     show = [r for r in rows if r["errors"] or r["warnings"]][:100] + [r for r in rows if not r["errors"] and not r["warnings"]][:30]
     show.sort(key=lambda r: r["line"])
-    return page("admin/import.html", "prod", "Importo produkte nga CSV", "Paneli › Produktet › Importi", step="preview", job=job, s=s, rows=show)
+    return page("admin/import.html", "prod", "Importo produkte (Excel ose CSV)", "Paneli › Produktet › Importi", step="preview", job=job, s=s, rows=show,
+                notes=payload.get("notes") or [], opts=payload.get("opts") or {})
 
 
 @bp.post("/produktet/importi/<int:jid>/nis")

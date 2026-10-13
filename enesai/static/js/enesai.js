@@ -246,6 +246,10 @@
   function mountMap(box, zoom) {
     var wrap = box.querySelector('[data-ea-map]'), canvas = wrap.querySelector('[data-ea-map-canvas]'), form = closest(box, '[data-ea-checkout]');
     var lat = +wrap.getAttribute('data-lat'), lng = +wrap.getAttribute('data-lng');
+    if (!lat || !lng) {   /* no point yet → start at the store / Vlorë centre, never at 0,0 */
+      var c = (box.getAttribute('data-center') || '40.4660,19.4914').split(',');
+      lat = +c[0] || 40.4660; lng = +c[1] || 19.4914; wrap.setAttribute('data-lat', lat); wrap.setAttribute('data-lng', lng);
+    }
     if (!window.L) return;
     if (box._map) { box._user = false; box._map.invalidateSize(); box._map.setView([lat, lng], zoom, { animate: false }); return; }
     canvas.innerHTML = '';

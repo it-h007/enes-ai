@@ -184,11 +184,33 @@ def test_delete_all_requires_typed_confirmation_and_owner(client, app):
         assert _db().execute("SELECT COUNT(*) FROM products").fetchone()[0] == 0
 
 
-def _import(client, content, auto="1"):
+def _import(client, content, auto="1", name="p.csv", backorder=None):
     tok = csrf(client, "/paneli/produktet/importi")
-    r = client.post("/paneli/produktet/importi", data={"csrf_token": tok, "auto_categories": auto, "file": (io.BytesIO(content), "p.csv")},
-                    content_type="multipart/form-data")
+    data = {"csrf_token": tok, "auto_categories": auto, "file": (io.BytesIO(content), name)}
+    if backorder:
+        data["backorder"] = "1"
+    r = client.post("/paneli/produktet/importi", data=data, content_type="multipart/form-data")
     return r
+
+
+def _xlsx(rows):
+    import openpyxl
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Exported"
+    for r in rows:
+        ws.append(r)
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
+def _run_import(client, r):
+    assert r.status_code == 302, r.text[:500]
+    jid = int(r.headers["Location"].rstrip("/").split("/")[-1])
+    prev = client.get(r.headers["Location"]).text
+    client.post("/paneli/produktet/importi/%d/nis" % jid, data={"csrf_token": csrf(client, r.headers["Location"])})
+    return jid, prev
 
 
 def test_csv_import_bom_semicolon_update_and_errors(client, app):
@@ -224,7 +246,7 @@ def test_csv_import_comma_and_tab_and_missing_columns(client, app):
     r = _import(client, b"sku\temri_sq\tkategoria\tcmimi\nX-2\tLeng\tPije\t120\n")
     assert r.status_code == 302
     r = _import(client, b"emri;cmimi\nA;1\n")
-    assert r.status_code == 400 and "Mungojnë kolonat" in r.text
+    assert r.status_code == 400 and "Mungon kolona e kodit" in r.text
     r = _import(client, b"sku;emri_sq;kategoria;cmimi\nX-3;Kafe;E panjohur;100\n", auto="0")
     prev = client.get(r.headers["Location"]).text
     assert "nuk ekziston" in prev
@@ -335,3 +357,94 @@ def test_login_page_explains_missing_owner(tmp_path, monkeypatch):
     r = login(c, username="admin", password="cfaredo-1234")
     assert r.status_code == 401
     assert "Pronari nuk është krijuar ende" in r.text and "nis.bat" in r.text
+
+
+def test_xlsx_market_export_then_prices_and_categories(client, app):
+    """ARTIKUJ_TOTAL.xlsx format: Kodi · Përshkrimi · Njësi — no price/category/stock yet."""
+    login(client)
+    data = _xlsx([["Kodi", "Përshkrimi", "Njësi"],
+                  ["8000500385081", "KINDER BUENO LAJTHI 62 GR", "COPE"],
+                  ["00363", "GJIZ FEAKS", "KG"],
+                  ["DJATH GOUDA", "DJATH GOUDA", "KG"],
+                  ["6935031405606 .", "LLAMBA LED", "COPE"],
+                  ["XX-1", "SHIRIT", "METRA"],
+                  [8000500384718, "KINDER BUENO WHITE AKULLORE *4", "COPE"]])
+    jid, prev = _run_import(client, _import(client, data, name="ARTIKUJ_TOTAL.xlsx"))
+    assert "nuk ka kolonë çmimi" in prev and "Kodi u përshtat" in prev
+    with app.app_context():
+        con = _db()
+        assert con.execute("SELECT status, created_n FROM import_jobs WHERE id=?", (jid,)).fetchone()[:] == ("done", 6)
+        r = con.execute("SELECT * FROM products WHERE sku='8000500385081'").fetchone()
+        assert (r["price"], r["category_id"], r["visible"], r["auto_hidden"], r["barcode"], r["unit"]) == (0, None, 0, 1, "8000500385081", "copë")
+        g = con.execute("SELECT unit, packaging, barcode FROM products WHERE sku='00363'").fetchone()
+        assert g[:] == ("kg", "1 kg", "")
+        assert con.execute("SELECT 1 FROM products WHERE sku='DJATH-GOUDA'").fetchone()
+        assert con.execute("SELECT 1 FROM products WHERE sku='6935031405606'").fetchone()
+        assert con.execute("SELECT unit FROM products WHERE sku='XX-1'").fetchone()[0] == "m"
+        assert con.execute("SELECT 1 FROM products WHERE sku='8000500384718'").fetchone()  # numeric cell → no “.0”
+    # hidden: not in the shop, search or direct URL
+    assert "KINDER BUENO" not in client.get("/dyqani?q=kinder&stok=0").text
+    with app.app_context():
+        pid = _db().execute("SELECT id FROM products WHERE sku='8000500385081'").fetchone()[0]
+    assert client.get("/produkt/%d" % pid).status_code == 404
+    # cannot be switched on without a price
+    tok = csrf(client, "/paneli/produktet")
+    r = client.post("/paneli/produktet/%d/dukshem" % pid, data={"csrf_token": tok}, headers={"X-Requested-With": "fetch"})
+    assert r.status_code == 409 and "çmim" in r.get_json()["message"]
+    # later file with prices (+ a category for one) — names absent: existing codes still update
+    data2 = _xlsx([["Kodi", "Çmimi", "Kategoria"],
+                   ["8000500385081", 120, "Snack & Ëmbëlsira"],
+                   ["00363", "650", ""],
+                   ["NEW-1", "99", ""]])
+    jid2, prev2 = _run_import(client, _import(client, data2, name="cmimet.xlsx"))
+    assert "Mungon emri i produktit të ri" in prev2
+    with app.app_context():
+        con = _db()
+        r = con.execute("SELECT * FROM products WHERE sku='8000500385081'").fetchone()
+        assert (r["price"], r["visible"], r["auto_hidden"], r["name_sq"]) == (120, 1, 0, "KINDER BUENO LAJTHI 62 GR")
+        g = con.execute("SELECT price, visible, auto_hidden, unit FROM products WHERE sku='00363'").fetchone()
+        assert g[:] == (650, 0, 1, "kg")   # price but still no category → stays hidden
+    assert "KINDER BUENO" in client.get("/dyqani?q=kinder&stok=0").text  # live (out of stock until stock/backorder is set)
+    # bulk category for every product of a search filter completes the rest
+    with app.app_context():
+        cid = _db().execute("SELECT id FROM categories WHERE slug='bulmet'").fetchone()[0]
+    tok = csrf(client, "/paneli/produktet?stoku=nocat")
+    r = client.post("/paneli/produktet/bulk", data={"csrf_token": tok, "action": "category", "category_id": cid, "scope": "filter",
+                                                    "f_q": "gjiz", "f_stoku": "nocat"})
+    assert r.status_code == 302
+    with app.app_context():
+        g = _db().execute("SELECT visible, auto_hidden, category_id FROM products WHERE sku='00363'").fetchone()
+        assert g[:] == (1, 0, cid)
+        assert _db().execute("SELECT category_id FROM products WHERE sku='DJATH-GOUDA'").fetchone()[0] is None  # not in the filter
+
+
+def test_bulk_show_skips_products_without_price(client, app):
+    login(client)
+    _run_import(client, _import(client, _xlsx([["Kodi", "Përshkrimi"], ["P-1", "PA CMIM"]]), name="a.xlsx"))
+    with app.app_context():
+        pid = _db().execute("SELECT id FROM products WHERE sku='P-1'").fetchone()[0]
+    tok = csrf(client, "/paneli/produktet")
+    r = client.post("/paneli/produktet/bulk", data={"csrf_token": tok, "action": "show", "ids": [pid, 3002]}, follow_redirects=True)
+    assert "1 nuk u shfaqën" in r.text
+    with app.app_context():
+        assert _db().execute("SELECT visible FROM products WHERE id=?", (pid,)).fetchone()[0] == 0
+
+
+def test_xlsx_backorder_option_and_old_xls_refused(client, app):
+    login(client)
+    _run_import(client, _import(client, _xlsx([["Kodi", "Përshkrimi", "Çmimi", "Kategoria"], ["B-1", "UJE 1L", 50, "Pije"]]), name="b.xlsx", backorder=True))
+    with app.app_context():
+        r = _db().execute("SELECT visible, stock, allow_backorder FROM products WHERE sku='B-1'").fetchone()
+        assert r[:] == (1, 0, 1)
+    r = _import(client, b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1" + b"0" * 100, name="old.xls")
+    assert r.status_code == 400 and ".xlsx" in r.text
+
+
+def test_product_form_allows_hidden_without_price(client, app):
+    login(client)
+    tok = csrf(client, "/paneli/produktet/re")
+    base = {"csrf_token": tok, "sku": "F-1", "name_sq": "Produkt pa cmim", "price": "", "category_id": "", "stock": "0", "low_threshold": "5", "discount_pct": "0"}
+    r = client.post("/paneli/produktet/re", data=base)
+    assert r.status_code == 302
+    r = client.post("/paneli/produktet/re", data=dict(base, sku="F-2", visible="1"))
+    assert r.status_code == 422 and "duhet të ketë çmim" in r.text

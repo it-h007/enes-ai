@@ -56,7 +56,7 @@ Vendime që i takojnë marketit (lista e plotë në `IMPLEMENTATION_STATUS.md`):
 |---|---|---|
 | Faqja publike | `/`, `/dyqani`, `/oferta`, `/kategorite`, `/kategoria/<slug>`, `/produkt/<id>`, `/shporta`, `/arka`, `/porosia/<nr>?t=…`, `/njoftime`, `/rreth-nesh`, `/kontakt`, `/kushtet` | Ballina është vetëm prezantim (pa “Shto në shportë”). |
 | Shporta | sesioni i shfletuesit | Çmimet, stoku, kuponi dhe totali llogariten **gjithmonë në server**. |
-| Arka | 4 hapa | Emri, Mbiemri, Telefoni, Email (opsional) · vendndodhja **e detyrueshme** · cash në dorëzim (karta “së shpejti”) · kuponi + kushtet. |
+| Arka | 4 hapa | Emri, Mbiemri, Telefoni, Email (opsional) · vendndodhja **e detyrueshme** (harta hapet te Vlora; pika duhet të jetë brenda `MAX_DELIVERY_KM`, parazgjedhur 60 km nga dyqani) · cash në dorëzim (karta “së shpejti”) · kuponi + kushtet. |
 | Porosia | një transaksion SQLite | Numri `EA-VVVV-NNNNN` (rritet vetë për çdo vit), kuponi shënohet “i përdorur” në mënyrë atomike, stoku ulet, të dhënat e shitësit ruhen si “fotografi” e faturës. |
 | Konfirmimi + PDF | lidhje me token sekret (30 ditë) | Pa token → 404. PDF me ReportLab, lidhje e klikueshme dhe QR për Google Maps. |
 | WhatsApp | `wa.me/<numri i marketit>?text=…` | Klienti shtyp “Dërgo” në WhatsApp. Kjo regjistrohet si **“hapur”**, jo si “dërguar”. Dërgimi automatik i PDF-së kërkon WhatsApp Business API (shih §5). |
@@ -65,15 +65,21 @@ Vendime që i takojnë marketit (lista e plotë në `IMPLEMENTATION_STATUS.md`):
 ### Rolet dhe lejet
 Seksionet: Porositë · Faturat · Produktet · Importi CSV · Kategoritë · Abonentët · Ofertat e email-it · Kuponat · Reklamat & Njoftimet · Raportet · Regjistri · Cilësimet. Vetëm pronari: Operatorët dhe “Fshi të gjitha produktet”. Çdo veprim kontrollohet në server (403 + regjistër), jo vetëm duke fshehur butonat.
 
-### Importi CSV
-Kolonat: `sku, emri_sq, emri_en, kategoria, nenkategoria, marka, paketimi, cmimi, zbritja, stoku, i_dukshem, foto_url` — UTF-8 (edhe me BOM), ndarës `,` `;` ose TAB, deri 20 MB. SKU ekzistues përditësohet, i riu krijohet, asgjë nuk fshihet. Rreshtat me gabime kapërcehen dhe shkarkohen si CSV. `foto_url` nga interneti **nuk** shkarkohet (siguri); fotot ngarkohen te produkti.
+### Importi i produkteve (Excel ose CSV)
+Paneli › Produktet › **Importo Excel / CSV**. Pranohet **direkt skedari i programit të marketit** (`.xlsx`, p.sh. `ARTIKUJ_TOTAL.xlsx` me kolonat **Kodi · Përshkrimi · Njësi**) ose CSV. Kolonat njihen edhe me emrat: `Çmimi`, `Kategoria`/`Grupi`, `Stoku`/`Sasia`, `Barkodi`, ose shablloni `sku, emri_sq, emri_en, kategoria, nenkategoria, marka, paketimi, njesia, barkodi, cmimi, zbritja, stoku, i_dukshem, foto_url`.
+- E detyrueshme është vetëm **kodi** (dhe emri për produktet e reja). Kodi ekzistues përditësohet **vetëm me kolonat që ka skedari** — p.sh. një skedar `Kodi, Çmimi` ndryshon vetëm çmimet.
+- Produktet **pa çmim ose pa kategori ruhen të fshehura** (baza nuk lejon të dukshëm pa çmim). Sapo të marrin çmim + kategori (nga një import tjetër ose nga paneli), dalin vetë në dyqan.
+- Kategoritë për shumë produkte njëherësh: Produktet › filtri **“Pa kategori”** › kërkoni (p.sh. `AKULLORE`) › zgjidhni të gjitha › “Zbato për të gjitha N produktet e këtij filtri” › **Ndrysho kategorinë**.
+- Kodet me hapësira (`DJATH GOUDA`) bëhen `DJATH-GOUDA` (njësoj në çdo import). Kodet 8/12/13/14 shifra ruhen edhe si barkod. `KG` → kg (“1 kg”), `COPE` → copë, `METRA` → m.
+- Pa kolonë stoku: produktet e reja kanë stok 0 (“Mbaroi”), përveç nëse zgjidhni **“Stoku nuk ndiqet”** gjatë ngarkimit.
+- `.xls` i vjetër nuk pranohet (ruajeni si `.xlsx`). `foto_url` nga interneti nuk shkarkohet (siguri). Asgjë nuk fshihet nga importi.
 
 ---
 
 ## 4. Testet
 ```bash
 .venv/bin/pip install -r requirements-dev.txt
-.venv/bin/python -m pytest -q          # 75 teste: rrugët, hyrja, lejet, ngarkimet, importi, kuponat (garë paralele), numrat e porosive, PDF, WhatsApp, etj.
+.venv/bin/python -m pytest -q          # 82 teste: rrugët, hyrja, lejet, ngarkimet, importi, kuponat (garë paralele), numrat e porosive, PDF, WhatsApp, etj.
 ```
 Kontrollet në shfletues (Playwright/Chromium): `tools/e2e_checkout.py`, `tools/e2e_a11y.py`, `tools/e2e_admin.py`, `tools/shoot.py`, `tools/shoot_admin.py` (me `tools/devserver.sh`).
 

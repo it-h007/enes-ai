@@ -129,7 +129,7 @@ BASE_SELECT = """SELECT p.*, c.slug AS cat_slug, c.name_sq AS cat_name_sq, c.nam
   CASE WHEN ? = 'en' AND c.name_en <> '' THEN c.name_en ELSE c.name_sq END AS cat_name,
   s.name_sq AS sub_name,
   (SELECT path FROM product_images i WHERE i.product_id = p.id ORDER BY sort, id LIMIT 1) AS image
-FROM products p JOIN categories c ON c.id = p.category_id LEFT JOIN categories s ON s.id = p.subcategory_id"""
+FROM products p LEFT JOIN categories c ON c.id = p.category_id LEFT JOIN categories s ON s.id = p.subcategory_id"""
 
 
 def search_tokens(q):
@@ -151,10 +151,8 @@ def _search_clause(q, con, where, args):
             args.append("%" + t.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%")
 
 
-def list_products(f, con=None, public=True, per_page=PER_PAGE):
-    """f: dict with q, cats (list of category ids), subs (list), sale, stock, pmin, pmax, sort, page, ids."""
-    con = con or get_db()
-    where, args = [], [lang()]
+def _where(f, con, public):
+    where, args = [], []
     if public:
         where.append("p.visible = 1 AND c.visible = 1")
     if f.get("cats"):
@@ -181,15 +179,32 @@ def list_products(f, con=None, public=True, per_page=PER_PAGE):
         where.append("p.stock > p.low_threshold")
     elif f.get("stock_state") == "hidden":
         where.append("p.visible = 0")
+    elif f.get("stock_state") == "nocat":
+        where.append("p.category_id IS NULL")
+    elif f.get("stock_state") == "noprice":
+        where.append("p.price = 0")
     if f.get("pmin") is not None:
         where.append("p.sale_price >= ?"); args.append(int(f["pmin"]))
     if f.get("pmax") is not None:
         where.append("p.sale_price <= ?"); args.append(int(f["pmax"]))
     if f.get("q"):
         _search_clause(f["q"], con, where, args)
-    sql_where = (" WHERE " + " AND ".join(where)) if where else ""
-    count_args = args[1:]
-    total = con.execute("SELECT COUNT(*) FROM products p JOIN categories c ON c.id = p.category_id" + sql_where, count_args).fetchone()[0]
+    return (" WHERE " + " AND ".join(where)) if where else "", args
+
+
+def filter_ids(f, con=None, limit=50_000):
+    """Ids of every product matching an admin filter (bulk “all products of this filter”)."""
+    con = con or get_db()
+    sql_where, args = _where(f, con, public=False)
+    return [r[0] for r in con.execute("SELECT p.id FROM products p LEFT JOIN categories c ON c.id = p.category_id" + sql_where + " LIMIT ?", args + [limit])]
+
+
+def list_products(f, con=None, public=True, per_page=PER_PAGE):
+    """f: dict with q, cats (list of category ids), subs (list), sale, stock, pmin, pmax, sort, page, ids."""
+    con = con or get_db()
+    sql_where, count_args = _where(f, con, public)
+    args = [lang()] + count_args
+    total = con.execute("SELECT COUNT(*) FROM products p LEFT JOIN categories c ON c.id = p.category_id" + sql_where, count_args).fetchone()[0]
     pages = max(1, math.ceil(total / per_page))
     page = min(max(1, int(f.get("page") or 1)), pages)
     order = SORTS.get(f.get("sort") or "te-rejat", SORTS["te-rejat"])

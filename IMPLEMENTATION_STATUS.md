@@ -83,6 +83,7 @@ M1 shell + public templates → M2 schema/security/auth → M3 catalogue + admin
 | M5 — Confirmation, PDF, Faturat, WhatsApp | DONE | Signed confirmation link, ReportLab PDF (clickable Maps link + QR, seller snapshot), Faturat search, manual `wa.me` to the market number, courier text; WhatsApp Business API sender (DISABLED unless credentials) | pytest (pypdf: URI annotation, Albanian glyphs), PDF rendered and compared with `invoice-pdf__EA-2026-00149-1.png` |
 | M6 — Remaining admin, i18n, SEO | DONE | Orders, invoices, coupons, subscribers, e-mail offers (prepare only), ads/announcements, reports + CSV, audit page, settings; draft EN; sitemap/robots/canonical | pytest + browser screenshots of admin screens |
 | M7b — Windows first-run fixes | DONE | `nis.bat` refuses to run outside the extracted folder; repeats owner creation until it succeeds; login page explains when no owner exists; `run.py reset-password` / `fjalekalimi.bat` (local console only: new password, clears lockout, ends sessions, audited) | pytest + console run |
+| M8 — Client changes (13.10.2026) | DONE | (1) **Checkout map fix**: the map opened at 0,0 (template rendered an empty `data-lat` when no point existed) — now starts at the store/Vlorë centre, JS never falls back to 0,0, server rejects points farther than `MAX_DELIVERY_KM` (60) from the store. (2) **Hero photo** = client storefront photo (re-encoded), crop anchored to the sign; phone badge moved left so it does not cover “AI”. (3) **20 main categories** (+ Kancelari, Lodra, Produkte Festive, Enë Kuzhine, Veshmbathje, Tekstil) as real data via migration 0002 (no longer demo); placeholder art in the existing black/gold style until photos arrive; “Të gjitha kategoritë” tile fills the 7th slot at 7 columns. (4) **Excel import** of the market export (`Kodi · Përshkrimi · Njësi`, 10.200 rows): migration 0003 allows price 0 / no category **only for hidden products** (DB CHECK), `auto_hidden` makes them go live once complete; partial-column updates; filters “Pa çmim/Pa kategori”; bulk actions for every product of a filter | pytest (82) + browser: map at Vlorë with mocked tiles, real file imported in ~2 s (10.199 created hidden, 1 rejected row “. / .”), bulk category by filter |
 | M7 — QA, docs, deliverable | DONE | README (sq), DEPLOYMENT.md, `.env.example`, `nis.bat`, pinned requirements, `pytest.ini` (collection limited to `tests/` so nothing under `_reference/` is ever imported), final ZIP | See “Tests” below |
 
 ---
@@ -162,7 +163,7 @@ M1 shell + public templates → M2 schema/security/auth → M3 catalogue + admin
 
 | Suite | Result |
 |---|---|
-| `pytest` (`tests/`, 75 tests) | **75 passed** |
+| `pytest` (`tests/`, 82 tests) | **82 passed** |
 | `tools/e2e_checkout.py` (Chromium, real server) | **15 PASS, 0 FAIL** |
 | `tools/e2e_a11y.py` (focus trap/restore, skip link, keyboard search, admin phone menu…) | **23 PASS, 0 FAIL** |
 | `tools/e2e_admin.py` | **11 PASS, 0 FAIL** |
@@ -174,6 +175,9 @@ M1 shell + public templates → M2 schema/security/auth → M3 catalogue + admin
 ---
 
 ## Known limitations
+- New categories (Kancelari, Lodra, Produkte Festive, Enë Kuzhine, Veshmbathje, Tekstil) use placeholder art until the market sends photos (upload in Kategoritë).
+- Market product names are kept exactly as exported (UPPERCASE); prices, categories and stock are not in the current export.
+- Map tiles could not be loaded in the build environment (no internet); the map flow was verified with mocked tiles. Check once on a real phone/PC.
 - Product image variants / WebP / `srcset` (F-70) not implemented; one re-encoded image per upload.
 - No Open Graph image.
 - Rate limiting is per process (single Waitress process is the supported layout — DEPLOYMENT.md).

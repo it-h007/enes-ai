@@ -1,5 +1,8 @@
 """Demo content for development and visual checks — NOT store data.
 
+The 20 main categories are real store data (migration 0002) and are never demo;
+sub-categories, products, announcements, coupons and orders created here are demo.
+
 Every row inserted here has is_demo = 1 and is shown with a “DEMO” marker in the admin.
 Names, prices, stock, phones and people are fictitious (same demo set as the approved
 prototype so the screens can be compared with the screenshots).
@@ -67,21 +70,27 @@ COUPONS = [
 
 
 def seed(con):
-    if con.execute("SELECT COUNT(*) FROM categories WHERE is_demo = 1").fetchone()[0]:
+    if con.execute("SELECT COUNT(*) FROM products WHERE is_demo = 1").fetchone()[0]:
         print("Të dhënat demo ekzistojnë tashmë.")
         return
     t = now_iso()
+    from enesai.util import slugify
     with transaction(con):
         ids = {}
         for i, (slug, name, en, subs) in enumerate(CATS):
-            cur = con.execute("INSERT INTO categories(slug, name_sq, name_en, image, sort, visible, adult, is_demo, created_at, updated_at) VALUES (?,?,?,?,?,1,?,1,?,?)",
-                              (slug, name, en, S + "cat-" + slug + ".jpg", i + 1, 1 if slug == "pije-alkoolike" else 0, t, t))
-            ids[slug] = cur.lastrowid
+            # main categories are real store data (migration 0002); only reuse them here
+            row = con.execute("SELECT id FROM categories WHERE slug = ? AND parent_id IS NULL", (slug,)).fetchone()
+            if row:
+                ids[slug] = row[0]
+            else:
+                ids[slug] = con.execute("INSERT INTO categories(slug, name_sq, name_en, image, sort, visible, adult, is_demo, created_at, updated_at) VALUES (?,?,?,?,?,1,?,0,?,?)",
+                                        (slug, name, en, S + "cat-" + slug + ".jpg", i + 1, 1 if slug == "pije-alkoolike" else 0, t, t)).lastrowid
             for j, sub in enumerate(subs):
-                from enesai.util import slugify
-                cur2 = con.execute("INSERT INTO categories(slug, name_sq, name_en, parent_id, image, sort, visible, is_demo, created_at, updated_at) VALUES (?,?,?,?,?,?,1,1,?,?)",
-                                   (slug + "-" + slugify(sub), sub, "", ids[slug], "", j + 1, t, t))
-                ids[(slug, sub)] = cur2.lastrowid
+                sslug = slug + "-" + slugify(sub)
+                row = con.execute("SELECT id FROM categories WHERE slug = ?", (sslug,)).fetchone()
+                ids[(slug, sub)] = row[0] if row else con.execute(
+                    "INSERT INTO categories(slug, name_sq, name_en, parent_id, image, sort, visible, is_demo, created_at, updated_at) VALUES (?,?,?,?,?,?,1,1,?,?)",
+                    (sslug, sub, "", ids[slug], "", j + 1, t, t)).lastrowid
         for (pid, sku, name, en, pack, price, pct, cat, sub, imgs, stock, brand, desc) in PRODUCTS:
             cname = [c[1] for c in CATS if c[0] == cat][0]
             con.execute("""INSERT INTO products(id, sku, name_sq, name_en, desc_sq, brand, packaging, unit, price, discount_pct, sale_price, stock,
@@ -102,7 +111,7 @@ def seed(con):
             con.execute("INSERT INTO coupons(code, pct, status, created_by_name, created_at, ends_on, note, is_demo) VALUES (?,?, 'active', ?,?,?,?,1)",
                         (code, pct, by, created, until, note))
             con.execute("INSERT INTO coupon_events(code, event, at, by_name) VALUES (?, 'created', ?, ?)", (code, created, by))
-    print("U shtuan të dhënat demo: %d kategori, %d produkte, %d njoftime, %d kupona." % (len(CATS), len(PRODUCTS), len(ANN), len(COUPONS)))
+    print("U shtuan të dhënat demo: nënkategori për %d kategori, %d produkte, %d njoftime, %d kupona." % (len(CATS), len(PRODUCTS), len(ANN), len(COUPONS)))
 
 
 def bulk(con, n):

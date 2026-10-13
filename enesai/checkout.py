@@ -14,7 +14,6 @@ from .services.totals import totals
 from .util import maps_url, wa_url
 
 bp = Blueprint("checkout", __name__)
-VLORE = (40.4660, 19.4914)
 
 
 def _idem():
@@ -26,11 +25,7 @@ def _idem():
 
 
 def _center():
-    s = st.all_settings()
-    try:
-        return (float(s["store_lat"]), float(s["store_lng"])) if s.get("store_lat") and s.get("store_lng") else VLORE
-    except ValueError:
-        return VLORE
+    return orders.store_center()
 
 
 def _ctx(lines, coupon=None, coupon_state=None, v=None, loc=None, fe=None, submitted=False, form_alert=None):

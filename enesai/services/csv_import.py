@@ -1,6 +1,7 @@
-"""CSV product import (V1-13, ADMIN_REQUIREMENTS §5).
+"""Product import from Excel (.xlsx) or CSV (V1-13, ADMIN_REQUIREMENTS §5).
 
-Upload → parse (UTF-8 with/without BOM; fallback Windows-1252; delimiter , ; or TAB) →
+Upload → parse (.xlsx first sheet via openpyxl; CSV UTF-8 with/without BOM, fallback Windows-1252,
+delimiter , ; or TAB; the market export “Kodi · Përshkrimi · Njësi” is recognised) →
 per-row validation and preview (update / new / warning / error) → run in batches of 500
 inside transactions in a background thread with progress → results + error CSV.
 Rows match existing products by SKU (update) else create. Nothing is ever deleted.
@@ -20,10 +21,22 @@ from . import audit
 from . import products as psvc
 from .catalog import DISCOUNTS
 
-COLUMNS = ["sku", "emri_sq", "emri_en", "kategoria", "nenkategoria", "marka", "paketimi", "cmimi", "zbritja", "stoku", "i_dukshem", "foto_url"]
+COLUMNS = ["sku", "emri_sq", "emri_en", "kategoria", "nenkategoria", "marka", "paketimi", "njesia", "barkodi", "cmimi", "zbritja", "stoku",
+           "i_dukshem", "foto_url"]
+# Header names seen in shop/market exports (accents and case are ignored; spaces → “_”).
 ALIASES = {"emri": "emri_sq", "name": "emri_sq", "name_sq": "emri_sq", "name_en": "emri_en", "category": "kategoria", "subcategory": "nenkategoria",
-           "nënkategoria": "nenkategoria", "brand": "marka", "pack": "paketimi", "packaging": "paketimi", "price": "cmimi", "çmimi": "cmimi",
-           "discount": "zbritja", "stock": "stoku", "visible": "i_dukshem", "i_dukshëm": "i_dukshem", "image": "foto_url", "photo": "foto_url"}
+           "brand": "marka", "pack": "paketimi", "packaging": "paketimi", "price": "cmimi", "discount": "zbritja", "stock": "stoku",
+           "visible": "i_dukshem", "image": "foto_url", "photo": "foto_url",
+           # market program export (ARTIKUJ_TOTAL.xlsx: Kodi · Përshkrimi · Njësi) and common variants
+           "kodi": "sku", "kodi_i_artikullit": "sku", "kod": "sku", "code": "sku",
+           "pershkrimi": "emri_sq", "artikulli": "emri_sq", "emertimi": "emri_sq", "emri_i_artikullit": "emri_sq",
+           "njesi": "njesia", "njesia_matese": "njesia", "nj": "njesia", "unit": "njesia",
+           "barkod": "barkodi", "barcode": "barkodi", "ean": "barkodi",
+           "cmim": "cmimi", "cmimi_shitjes": "cmimi", "cmimi_i_shitjes": "cmimi", "cmimi_me_tvsh": "cmimi", "cmim_shitje": "cmimi",
+           "sasia": "stoku", "gjendja": "stoku", "stok": "stoku", "sasi": "stoku",
+           "grupi": "kategoria", "kategori": "kategoria", "nengrupi": "nenkategoria"}
+UNIT_MAP = {"cope": "copë", "cp": "copë", "copa": "copë", "pcs": "copë", "kg": "kg", "kilogram": "kg", "l": "L", "lt": "L", "liter": "L",
+            "litra": "L", "m": "m", "metra": "m", "meter": "m", "pako": "pako", "pk": "pako"}
 MAX_ROWS = 200_000
 BATCH = 500
 
@@ -59,48 +72,114 @@ def parse_price(v):
     return n if 0 < n <= 10_000_000 else None
 
 
-def parse(raw, auto_categories=True, con=None):
+def _cell(v):
+    """Excel cell → text. Whole numbers lose the “.0” (codes, prices, stock)."""
+    if v is None:
+        return ""
+    if isinstance(v, bool):
+        return "1" if v else "0"
+    if isinstance(v, float):
+        return str(int(v)) if v.is_integer() else repr(v)
+    if isinstance(v, int):
+        return str(v)
+    if hasattr(v, "isoformat"):
+        return v.isoformat()
+    return str(v).strip()
+
+
+def read_table(raw, filename=""):
+    """→ (header, iterator of (line_number, cells)). Excel .xlsx (first sheet) or CSV/TXT."""
+    name = (filename or "").lower()
+    if name.endswith(".xls") or raw[:8] == b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1":
+        raise ImportError_("Formati i vjetër .xls nuk pranohet. Hapeni në Excel dhe ruajeni si .xlsx (Excel Workbook) ose CSV.")
+    if name.endswith(".xlsx") or raw[:4] == b"PK\x03\x04":
+        try:
+            import openpyxl
+            wb = openpyxl.load_workbook(io.BytesIO(raw), read_only=True, data_only=True)
+        except Exception:
+            raise ImportError_("Skedari Excel nuk u lexua. Ruajeni sërish si .xlsx dhe provoni përsëri.")
+        ws = next((w for w in wb.worksheets if (w.max_row or 0) > 0), None)
+        if ws is None:
+            raise ImportError_("Skedari është bosh.")
+        it = ((i, [_cell(c) for c in row]) for i, row in enumerate(ws.iter_rows(values_only=True), start=1))
+    else:
+        text = decode(raw)
+        if not text.strip():
+            raise ImportError_("Skedari është bosh.")
+        rdr = csv.reader(io.StringIO(text), delimiter=sniff_delimiter(text))
+        it = ((i, [c.strip() for c in row]) for i, row in enumerate(rdr, start=1))
+    for i, cells in it:
+        if any(cells):
+            return cells, it
+    raise ImportError_("Skedari është bosh.")
+
+
+def _col(h):
+    k = norm(h).replace(" ", "_").replace(".", "")
+    return ALIASES.get(k, k)
+
+
+def clean_sku(v):
+    """Market codes sometimes contain spaces (“DJATH GOUDA”, “6935031405606 .”): trim stray
+    dots/spaces and join words with “-”, the same way on every import so updates still match."""
+    return re.sub(r"\s+", "-", str(v or "").strip().strip(".").strip())
+
+
+def parse(raw, auto_categories=True, con=None, filename="", backorder=False):
+    """→ (rows, notes). Only sku + name are required; price, category and stock may be missing
+    (products are then stored hidden and completed by a later import or in the admin)."""
     con = con or get_db()
-    text = decode(raw)
-    if not text.strip():
-        raise ImportError_("Skedari është bosh.")
-    delim = sniff_delimiter(text)
-    rdr = csv.reader(io.StringIO(text), delimiter=delim)
-    try:
-        header = next(rdr)
-    except StopIteration:
-        raise ImportError_("Skedari është bosh.")
-    cols = [ALIASES.get(norm(h).replace(" ", "_"), norm(h).replace(" ", "_")) for h in header]
-    missing = [c for c in ("sku", "emri_sq", "kategoria", "cmimi") if c not in cols]
-    if missing:
-        raise ImportError_("Mungojnë kolonat: %s. Shkarkoni shabllonin." % ", ".join(missing))
+    header, it = read_table(raw, filename)
+    cols = [_col(h) for h in header]
+    if "sku" not in cols:
+        raise ImportError_("Mungon kolona e kodit (SKU / Kodi). Duhen të paktën kodi dhe — për produktet e reja — emri (Emri / Përshkrimi).")
+    has = set(cols)
+    notes = []
+    if "cmimi" not in has:
+        notes.append("Skedari nuk ka kolonë çmimi: produktet e reja ruhen të fshehura (pa çmim). Kur të keni skedarin me çmime, "
+                     "importojeni sërish — produktet përditësohen sipas kodit dhe dalin në dyqan sapo të kenë çmim dhe kategori.")
+    if "kategoria" not in has:
+        notes.append("Skedari nuk ka kolonë kategorie: produktet e reja mbeten “Pa kategori” (të fshehura). Caktojuani kategorinë te "
+                     "Produktet › filtri “Pa kategori” (kërkoni p.sh. “AKULLORE” dhe zbatoni kategorinë për të gjitha).")
+    if "stoku" not in has:
+        notes.append("Skedari nuk ka stok: stoku i produkteve ekzistuese nuk ndryshon; produktet e reja fillojnë me 0"
+                     + (" dhe lejohen porositë edhe pa stok (zgjodhët “stoku nuk ndiqet”)." if backorder
+                        else " (“Mbaroi”). Nëse nuk e ndiqni stokun online, zgjidhni opsionin “stoku nuk ndiqet” në ngarkim."))
     cats = {}
     for r in con.execute("SELECT id, slug, name_sq, parent_id FROM categories"):
         cats[(r["parent_id"], norm(r["name_sq"]))] = r["id"]
         cats[(r["parent_id"], r["slug"])] = r["id"]
     existing = {r[0] for r in con.execute("SELECT sku FROM products")}
     rows, seen = [], set()
-    for i, rec in enumerate(rdr, start=2):
-        if i - 1 > MAX_ROWS:
+    for i, rec in it:
+        if len(rows) >= MAX_ROWS:
             raise ImportError_("Shumë rreshta (maksimumi %d)." % MAX_ROWS)
-        if not any(x.strip() for x in rec):
+        if not any(rec):
             continue
-        d = {c: (rec[k].strip() if k < len(rec) else "") for k, c in enumerate(cols) if c in COLUMNS}
+        d = {}
+        for k, c in enumerate(cols):
+            if c in COLUMNS and k < len(rec) and c not in d:
+                d[c] = rec[k].strip()
         errs, warns = [], []
-        sku = d.get("sku", "")
+        raw_sku = d.get("sku", "")
+        sku = clean_sku(raw_sku)
         if not sku:
-            errs.append(("Mungon SKU", "Shtoni një SKU unik dhe importoni sërish."))
+            errs.append(("Mungon SKU / kodi", "Shtoni një kod unik dhe importoni sërish."))
         elif not psvc.SKU_RE.match(sku):
-            errs.append(("SKU “%s” ka shenja të palejuara" % sku, "Përdorni shkronja, shifra, “-”, “_” ose “.”."))
+            errs.append(("Kodi “%s” ka shenja të palejuara" % raw_sku, "Përdorni shkronja, shifra, “-”, “_” ose “.” (deri 40)."))
         elif sku in seen:
-            errs.append(("SKU “%s” përsëritet në skedar" % sku, "Mbani vetëm një rresht për çdo SKU."))
+            errs.append(("Kodi “%s” përsëritet në skedar" % sku, "Mbani vetëm një rresht për çdo kod."))
+        elif sku != raw_sku:
+            warns.append("Kodi u përshtat: “%s” → “%s”" % (raw_sku, sku))
         seen.add(sku)
-        if len(d.get("emri_sq", "")) < 2:
-            errs.append(("Mungon emri", "Plotësoni kolonën emri_sq."))
-        price = parse_price(d.get("cmimi"))
-        if price is None:
-            errs.append(("Çmimi “%s” nuk është numër" % d.get("cmimi", ""), "Përdorni vetëm shifra, p.sh. 250."))
-        pct = 0
+        if len(d.get("emri_sq", "")) < 2 and sku not in existing:
+            errs.append(("Mungon emri i produktit të ri", "Plotësoni emrin / përshkrimin (për kodet ekzistuese mund të mungojë)."))
+        price = None
+        if d.get("cmimi"):
+            price = parse_price(d["cmimi"])
+            if price is None:
+                errs.append(("Çmimi “%s” nuk është numër" % d["cmimi"], "Përdorni vetëm shifra, p.sh. 250."))
+        pct = None
         if d.get("zbritja"):
             try:
                 pct = int(d["zbritja"].replace("%", "").strip() or 0)
@@ -108,24 +187,25 @@ def parse(raw, auto_categories=True, con=None):
                     raise ValueError
             except ValueError:
                 errs.append(("Zbritja “%s” nuk lejohet" % d["zbritja"], "Vlerat e lejuara: 0, 5, 10, 15, 20, 25, 30, 40, 50."))
-        stock = 0
-        if d.get("stoku", "") == "":
-            warns.append("Stoku bosh → 0")
-        else:
+        stock = None
+        if d.get("stoku"):
             try:
-                stock = int(d["stoku"].replace(".", ""))
+                st_raw = d["stoku"].replace(" ", "")
+                if re.match(r"^\d{1,3}(\.\d{3})+$", st_raw):      # 1.250 → 1250 (thousands)
+                    st_raw = st_raw.replace(".", "")
+                stock = int(float(st_raw.replace(",", ".")))       # 12,5 kg → 12
                 if stock < 0:
                     raise ValueError
             except ValueError:
                 errs.append(("Stoku “%s” nuk është numër" % d["stoku"], "Shkruani një numër të plotë ≥ 0."))
-        vis = norm(d.get("i_dukshem", "1")) not in ("0", "jo", "false", "no", "n")
+        vis = None
+        if d.get("i_dukshem"):
+            vis = norm(d["i_dukshem"]) not in ("0", "jo", "false", "no", "n")
         cname = d.get("kategoria", "")
-        cat_id = cats.get((None, norm(cname))) or cats.get((None, slugify(cname)))
-        if not cname:
-            errs.append(("Mungon kategoria", "Plotësoni kolonën kategoria."))
-        elif not cat_id and not auto_categories:
+        cat_id = cats.get((None, norm(cname))) or cats.get((None, slugify(cname))) if cname else None
+        if cname and not cat_id and not auto_categories:
             errs.append(("Kategoria “%s” nuk ekziston" % cname, "Krijojeni te Kategoritë ose aktivizoni krijimin automatik."))
-        elif not cat_id:
+        elif cname and not cat_id:
             warns.append("Kategori e re: %s" % cname)
         sname = d.get("nenkategoria", "")
         if sname and cat_id and not cats.get((cat_id, norm(sname))):
@@ -133,15 +213,28 @@ def parse(raw, auto_categories=True, con=None):
                 warns.append("Nënkategori e re: %s" % sname)
             else:
                 errs.append(("Nënkategoria “%s” nuk ekziston" % sname, "Krijojeni ose aktivizoni krijimin automatik."))
+        unit = ""
+        if d.get("njesia"):
+            unit = UNIT_MAP.get(norm(d["njesia"]).replace(".", ""), "")
+            if not unit:
+                warns.append("Njësia “%s” nuk njihet → copë" % d["njesia"])
+                unit = "copë"
+        barcode = re.sub(r"\s", "", d.get("barkodi", ""))
+        if barcode and not barcode.isdigit():
+            warns.append("Barkodi “%s” nuk ka vetëm shifra → nuk u ruajt" % barcode)
+            barcode = ""
+        if not barcode and sku.isdigit() and len(sku) in (8, 12, 13, 14):
+            barcode = sku  # the market code is an EAN/UPC barcode
         foto = d.get("foto_url", "")
         if foto and not foto.startswith("/static/img/"):
             warns.append("foto_url nuk shkarkohet — ngarkoni foton te produkti")
             foto = ""
         rows.append({"line": i, "sku": sku, "name_sq": d.get("emri_sq", ""), "name_en": d.get("emri_en", ""), "cat": cname, "sub": sname,
-                     "brand": d.get("marka", ""), "pack": d.get("paketimi", ""), "price": price, "pct": pct, "stock": stock, "visible": vis,
-                     "foto": foto, "errors": errs, "warnings": warns, "kind": "error" if errs else ("update" if sku in existing else "new"),
+                     "brand": d.get("marka", ""), "pack": d.get("paketimi", ""), "unit": unit, "barcode": barcode, "price": price, "pct": pct,
+                     "stock": stock, "visible": vis, "foto": foto, "errors": errs, "warnings": warns,
+                     "kind": "error" if errs else ("update" if sku in existing else "new"),
                      "raw_price": d.get("cmimi", ""), "raw_stock": d.get("stoku", "")})
-    return rows, delim
+    return rows, notes
 
 
 def summary(rows):
@@ -149,20 +242,30 @@ def summary(rows):
             "err": sum(1 for r in rows if r["errors"]), "new": sum(1 for r in rows if r["kind"] == "new"), "upd": sum(1 for r in rows if r["kind"] == "update")}
 
 
-def save_job(filename, rows, auto_categories, operator):
+def save_job(filename, rows, auto_categories, operator, notes=(), backorder=False):
     con = get_db()
     s = summary(rows)
     cur = con.execute("INSERT INTO import_jobs(filename, created_by, created_at, status, total, warnings, errors, auto_categories) VALUES (?,?,?, 'preview', ?,?,?,?)",
                       (filename[:120], operator["name"], now_iso(), s["total"], s["warn"], s["err"], 1 if auto_categories else 0))
     jid = cur.lastrowid
     path = Path(current_app.config["PRIVATE_DIR"]) / "imports" / ("job-%d.json" % jid)
-    path.write_text(json.dumps(rows, ensure_ascii=False), encoding="utf-8")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"rows": rows, "notes": list(notes), "opts": {"backorder": bool(backorder)}}, ensure_ascii=False), encoding="utf-8")
     con.execute("UPDATE import_jobs SET payload_path=? WHERE id=?", (path.name, jid))
     return jid
 
 
+def _payload(private_dir, job):
+    data = json.loads((Path(private_dir) / "imports" / job["payload_path"]).read_text(encoding="utf-8"))
+    return data if isinstance(data, dict) else {"rows": data, "notes": [], "opts": {}}
+
+
+def load_payload(job):
+    return _payload(current_app.config["PRIVATE_DIR"], job)
+
+
 def load_rows(job):
-    return json.loads((Path(current_app.config["PRIVATE_DIR"]) / "imports" / job["payload_path"]).read_text(encoding="utf-8"))
+    return load_payload(job)["rows"]
 
 
 def start(job_id, operator):
@@ -183,7 +286,8 @@ def _run(app, job_id, operator):
         con = connect(app.config["DATABASE"])
         try:
             job = con.execute("SELECT * FROM import_jobs WHERE id=?", (job_id,)).fetchone()
-            rows = json.loads((Path(app.config["PRIVATE_DIR"]) / "imports" / job["payload_path"]).read_text(encoding="utf-8"))
+            payload = _payload(app.config["PRIVATE_DIR"], job)
+            rows, opts = payload["rows"], payload.get("opts") or {}
             good = [r for r in rows if not r["errors"]]
             created = updated = done = 0
             for start_i in range(0, len(good), BATCH):
@@ -191,7 +295,7 @@ def _run(app, job_id, operator):
                 con.execute("BEGIN IMMEDIATE")
                 try:
                     for r in chunk:
-                        c, u = _apply(con, r, job["auto_categories"])
+                        c, u = _apply(con, r, job["auto_categories"], opts)
                         created += c; updated += u
                     con.execute("COMMIT")
                 except Exception:
@@ -210,7 +314,7 @@ def _run(app, job_id, operator):
                             w.writerow([r["line"], csv_safe(r["sku"]), csv_safe(r["name_sq"]), csv_safe(prob), csv_safe(fix)])
                 con.execute("UPDATE import_jobs SET error_csv_path=? WHERE id=?", (p.name, job_id))
             con.execute("UPDATE import_jobs SET status='done', finished_at=? WHERE id=?", (now_iso(), job_id))
-            audit.log("Importoi CSV", "%s · %d ok, %d gabime" % (job["filename"], created + updated, len(errs)),
+            audit.log("Importoi produkte", "%s · %d ok, %d gabime" % (job["filename"], created + updated, len(errs)),
                       "", "krijuar %d · përditësuar %d" % (created, updated), area="import", con=con, operator=operator)
         except Exception:  # pragma: no cover - logged, job marked failed
             app.logger.exception("import job %s failed", job_id)
@@ -234,16 +338,42 @@ def _category(con, name, parent_id, auto):
     return cur.lastrowid
 
 
-def _apply(con, r, auto):
-    cat = _category(con, r["cat"], None, auto)
-    sub = _category(con, r["sub"], cat, auto) if r["sub"] and cat else None
+def _apply(con, r, auto, opts=None):
+    """Create or update one product. Only the columns present (and non-empty) in the file
+    change an existing product; a product without price or category is stored hidden."""
+    opts = opts or {}
     ex = con.execute("SELECT * FROM products WHERE sku=?", (r["sku"],)).fetchone()
-    d = {"sku": r["sku"], "name_sq": r["name_sq"][:160], "name_en": (r["name_en"] or (ex["name_en"] if ex else ""))[:160],
-         "desc_sq": ex["desc_sq"] if ex else "", "desc_en": ex["desc_en"] if ex else "", "brand": (r["brand"] or (ex["brand"] if ex else ""))[:80],
-         "packaging": (r["pack"] or (ex["packaging"] if ex else ""))[:60], "unit": ex["unit"] if ex else "copë", "barcode": ex["barcode"] if ex else "",
-         "price": r["price"], "discount_pct": r["pct"], "stock": r["stock"], "low_threshold": ex["low_threshold"] if ex else 5,
-         "allow_backorder": ex["allow_backorder"] if ex else 0, "visible": 1 if r["visible"] else 0, "on_offers": ex["on_offers"] if ex else 1,
-         "category_id": cat, "subcategory_id": sub}
+    g = (lambda k, default: ex[k] if ex else default)
+    cat = _category(con, r["cat"], None, auto) if r["cat"] else None
+    sub = _category(con, r["sub"], cat, auto) if r["sub"] and cat else None
+    cat_id = cat or g("category_id", None)
+    sub_id = sub if (sub or r["cat"]) else g("subcategory_id", None)
+    price = r["price"] if r["price"] is not None else g("price", 0)
+    unit = r.get("unit") or g("unit", "copë")
+    pack = r["pack"] or g("packaging", "")
+    if not pack and not ex and unit in ("kg", "L", "m"):
+        pack = "1 " + unit  # price is per kg / litre / metre
+    backorder = g("allow_backorder", 0)
+    if opts.get("backorder") and r["stock"] is None:
+        backorder = 1
+    complete = bool(price and price > 0 and cat_id)
+    if r["visible"] is not None:                       # explicit i_dukshem column wins (when possible)
+        visible, auto_hidden = (1 if r["visible"] and complete else 0), (1 if r["visible"] and not complete else 0)
+    elif not ex:                                         # new: live only when complete
+        visible, auto_hidden = (1, 0) if complete else (0, 1)
+    elif ex["auto_hidden"] and complete:                 # was waiting for data → goes live now
+        visible, auto_hidden = 1, 0
+    elif not complete:
+        visible, auto_hidden = 0, (1 if ex["visible"] or ex["auto_hidden"] else 0)
+    else:
+        visible, auto_hidden = ex["visible"], ex["auto_hidden"]
+    d = {"sku": r["sku"], "name_sq": (r["name_sq"] or g("name_sq", ""))[:160], "name_en": (r["name_en"] or g("name_en", ""))[:160],
+         "desc_sq": g("desc_sq", ""), "desc_en": g("desc_en", ""), "brand": (r["brand"] or g("brand", ""))[:80],
+         "packaging": pack[:60], "unit": unit, "barcode": (r.get("barcode") or g("barcode", ""))[:20],
+         "price": price, "discount_pct": r["pct"] if r["pct"] is not None else g("discount_pct", 0),
+         "stock": r["stock"] if r["stock"] is not None else g("stock", 0), "low_threshold": g("low_threshold", 5),
+         "allow_backorder": backorder, "visible": visible, "auto_hidden": auto_hidden, "on_offers": g("on_offers", 1),
+         "category_id": cat_id, "subcategory_id": sub_id}
     if ex:
         psvc.update(ex["id"], d, con)
         pid, c, u = ex["id"], 0, 1
@@ -254,4 +384,4 @@ def _apply(con, r, auto):
     return c, u
 
 
-TEMPLATE = "﻿" + ";".join(COLUMNS) + "\n" + "FR-1050;Avokado Hass;Hass avocado;Fruta & Perime;Fruta;Import · Spanjë;2 copë;300;20;30;1;\n"
+TEMPLATE = "﻿" + ";".join(COLUMNS) + "\n" + "FR-1050;Avokado Hass;Hass avocado;Fruta & Perime;Fruta;Import · Spanjë;2 copë;copë;;300;20;30;1;\n"
